@@ -133,7 +133,25 @@ curl -X POST http://localhost:8080/admin/api/menus \
 
 访问 http://localhost:8080/admin/
 
-默认账号: `admin / admin123`
+默认账号：
+
+| 用户名 | 密码 | 角色 |
+|--------|------|------|
+| `admin` | `admin123` | 超级管理员 |
+| `testuser` | `test123` | 测试人员 |
+
+预置测试端点可通过 Web UI「端点管理」页面查看，或直接调用：
+
+```bash
+# 公共端点
+curl http://localhost:8080/api/hello
+
+# admin 专属端点
+curl http://localhost:8080/api/admin-only -H "stub-x-token: admin"
+
+# WebSocket 回声
+websocat ws://localhost:8080/ws/echo
+```
 
 ## WebSocket 测试
 

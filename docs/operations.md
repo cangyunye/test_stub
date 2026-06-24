@@ -33,6 +33,18 @@ make run PORT=8080           # 启动服务
 | 用户名 | 密码 | 角色 |
 |--------|------|------|
 | `admin` | `admin123` | 超级管理员（所有权限） |
+| `testuser` | `test123` | 测试人员 |
+
+同时预置 HTTP 测试端点：
+
+| 路径 | 方法 | 说明 |
+|------|------|------|
+| `/api/hello` | GET | 公共端点，返回欢迎消息 |
+| `/api/echo` | POST | 公共端点，原样返回请求体 |
+| `/api/delay` | GET | 公共端点，1 秒延迟 |
+| `/api/admin-only` | GET | admin 专属，需 `stub-x-token: admin` |
+| `/api/admin-action` | POST | admin 专属 |
+| `/ws/echo` | WS | WebSocket 回声通道 |
 
 ---
 
@@ -211,16 +223,65 @@ mock-server add-endpoint --method GET --path /flaky \
 
 ### 条件规则
 
-响应体支持 Jinja2 模板，可根据请求参数动态渲染：
+支持在端点上配置条件分支，根据请求数据匹配规则返回不同响应：
+
+| 字段 | 说明 |
+|------|------|
+| `condition` | 匹配条件字典，key=请求数据字段，value=期望值 |
+| `response_body` | 命中规则时的响应体 |
+| `status_code` | 命中规则时的状态码 |
+
+匹配逻辑：规则按序检测，第一个 condition 全部匹配时命中。
+
+示例：根据 `query.type` 返回不同内容（通过 API 创建）
+
+```bash
+curl -X POST http://localhost:8080/admin/api/endpoints \
+  -H "Content-Type: application/json" \
+  -H "Cookie: mock_session_id=xxx" \
+  -d '{
+    "method":"GET","path":"/api/discount",
+    "status_code":200,
+    "response_body":"{\"level\":\"normal\",\"discount\":1.0}",
+    "condition_rules":[
+      {
+        "condition":{"query.type":"vip"},
+        "response_body":"{\"level\":\"vip\",\"discount\":0.8}",
+        "status_code":200
+      }
+    ]
+  }'
+
+# 测试默认响应
+curl http://localhost:8080/api/discount
+# {"level":"normal","discount":1.0}
+
+# 测试条件触发
+curl "http://localhost:8080/api/discount?type=vip"
+# {"level":"vip","discount":0.8}
+```
+
+### Jinja2 响应模板
+
+响应体支持 Jinja2 模板语法，可访问请求数据：
+
+| 模板变量 | 说明 |
+|----------|------|
+| `{{ method }}` | HTTP 方法（GET/POST/...） |
+| `{{ path }}` | 请求路径 |
+| `{{ query }}` | 查询参数（dict） |
+| `{{ headers }}` | 请求头（dict） |
+| `{{ body }}` | 请求体（字符串） |
+
+示例：
 
 ```
-响应体模板：
-{
-  "method": "{{method}}",
-  "path": "{{path}}",
-  "query": {{query|tojson}},
-  "body": {{body|tojson}}
-}
+{% set q = query %}
+{% if q.get("type") == "vip" %}
+{"level": "vip", "discount": 0.8}
+{% else %}
+{"level": "normal", "discount": 1.0}
+{% endif %}
 ```
 
 ---
@@ -265,11 +326,11 @@ Mock Server 支持多租户隔离：
 2. **用户专属端点**（`owner_id = 用户 ID`）：仅携带对应 `stub-x-token` 的请求可命中
 
 ```bash
-# 创建用户专属端点
+# 创建用户专属端点（不带 --public，带 --owner）
 mock-server add-endpoint --method GET --path /my/secret \
-  --owner tester --body '{"secret":"data"}' --public
+  --owner tester --body '{"secret":"data"}'
 
-# 无 token → 不匹配（可能返回 404 或命中公共端点）
+# 无 token → 不匹配（返回 404）
 curl http://localhost:8080/my/secret
 # 404
 
@@ -384,6 +445,7 @@ curl -X DELETE http://localhost:8080/admin/api/logs \
 | `MOCK_DATABASE_URL` | `sqlite+aiosqlite:///./mock_server.db` | 数据库连接（支持 PostgreSQL） |
 | `MOCK_ADMIN_PATH` | `/admin` | 管理后台路径前缀 |
 | `MOCK_LOG_RETENTION_DAYS` | `7` | 日志保留天数 |
+| `MOCK_MAX_REQUEST_BODY_SIZE` | `1048576` | 最大请求体大小（字节，1MB） |
 
 使用 PostgreSQL：
 
