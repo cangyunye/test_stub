@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Server — 用户与权限</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #161922;
+  --surface-2: #1c1f2b;
+  --fg: #e2e4ea;
+  --muted: #6e7185;
+  --border: #272a37;
+  --accent: #4c8bf5;
+  --accent-dim: oklch(45% 0.14 250 / 0.15);
+  --success: #34d399;
+  --success-dim: oklch(55% 0.14 160 / 0.12);
+  --warn: #fbbf24;
+  --warn-dim: oklch(65% 0.14 85 / 0.12);
+  --danger: #f87171;
+  --danger-dim: oklch(55% 0.16 25 / 0.12);
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, monospace;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  --radius: 6px;
+}
+[data-theme="light"] {
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f0f1f4;
+  --fg: #1a1c22; --muted: #6b7084; --border: #dfe1e6;
+  --accent: #4c8bf5; --accent-dim: oklch(92% 0.04 250);
+  --success: #16a34a; --success-dim: oklch(94% 0.04 150);
+  --warn: #d97706; --warn-dim: oklch(94% 0.04 80);
+  --danger: #dc2626; --danger-dim: oklch(94% 0.04 25);
+}
+:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); border-radius: var(--radius); }
+.theme-toggle { background: none; border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: var(--radius); display: grid; place-items: center; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.theme-toggle:hover { background: var(--surface-2); color: var(--fg); border-color: var(--border-hover, var(--border)); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body { font-family: var(--font-body); background: var(--bg); color: var(--fg); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: var(--accent); text-decoration: none; }
+
+.sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
+.sidebar-brand { height: var(--header-h); display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--border); font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.nav-section { margin-bottom: 20px; }
+.nav-section-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 0 12px 6px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius); color: var(--muted); font-size: 13px; font-weight: 450; transition: background 0.12s, color 0.12s; cursor: pointer; text-decoration: none; }
+.nav-item:hover { background: var(--surface-2); color: var(--fg); text-decoration: none; }
+.nav-item.active { background: var(--accent-dim); color: var(--accent); }
+.nav-item svg { flex-shrink: 0; opacity: 0.7; }
+.nav-item.active svg { opacity: 1; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+
+.main { margin-left: var(--sidebar-w); min-height: 100vh; }
+.page-header { height: var(--header-h); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 50; }
+.page-header h1 { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.page-body { padding: 24px 28px; }
+
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab { padding: 10px 18px; font-size: 13px; font-weight: 450; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.12s, border-color 0.12s; background: none; border-top: none; border-left: none; border-right: none; font-family: var(--font-body); }
+.tab:hover { color: var(--fg); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.search-box { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 12px; flex: 1; max-width: 300px; }
+.search-box svg { flex-shrink: 0; color: var(--muted); }
+.search-box input { background: none; border: none; color: var(--fg); font-size: 13px; font-family: var(--font-body); padding: 8px 0; outline: none; width: 100%; }
+.search-box input::placeholder { color: var(--muted); opacity: 0.6; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); cursor: pointer; transition: background 0.12s; font-family: var(--font-body); }
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: oklch(60% 0.18 250); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-danger { color: var(--danger); }
+.btn-danger:hover { background: var(--danger-dim); border-color: oklch(55% 0.16 25 / 0.3); }
+.btn-icon { padding: 6px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--radius); }
+.btn-icon:hover { background: var(--surface-2); color: var(--fg); }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.data-table td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: oklch(20% 0.01 250 / 0.5); }
+
+.mono { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; }
+.badge-success { background: var(--success-dim); color: var(--success); }
+.badge-warn { background: var(--warn-dim); color: var(--warn); }
+.badge-danger { background: var(--danger-dim); color: var(--danger); }
+.badge-accent { background: var(--accent-dim); color: var(--accent); }
+.badge-muted { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+.actions-cell { display: flex; gap: 4px; justify-content: flex-end; }
+
+.role-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.role-tag { font-size: 11px; padding: 1px 7px; border-radius: 3px; font-family: var(--font-mono); letter-spacing: 0.02em; }
+
+.perm-matrix { width: 100%; border-collapse: collapse; }
+.perm-matrix th { text-align: center; padding: 8px 6px; font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.perm-matrix th:first-child { text-align: left; padding-left: 16px; }
+.perm-matrix td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border); font-size: 12px; }
+.perm-matrix td:first-child { text-align: left; padding-left: 16px; font-family: var(--font-mono); font-size: 12px; }
+.perm-matrix tr:last-child td { border-bottom: none; }
+.perm-check { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+.tree-node { padding: 6px 0; }
+.tree-node-label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: var(--radius); cursor: pointer; font-size: 13px; transition: background 0.1s; }
+.tree-node-label:hover { background: var(--surface-2); }
+.tree-node-label .icon { color: var(--muted); font-size: 11px; font-family: var(--font-mono); }
+.tree-node-label .path { color: var(--muted); font-family: var(--font-mono); font-size: 11px; margin-left: auto; }
+.tree-children { padding-left: 24px; border-left: 1px solid var(--border); margin-left: 12px; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: oklch(0% 0 0 / 0.6); backdrop-filter: blur(4px); z-index: 200; display: none; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: 480px; max-height: 85vh; overflow-y: auto; }
+.modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+.modal-title { font-size: 15px; font-weight: 600; font-family: var(--font-display); letter-spacing: -0.01em; }
+.modal-body { padding: 24px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px 24px; border-top: 1px solid var(--border); }
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; margin-bottom: 6px; }
+.form-input, .form-select { width: 100%; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--fg); font-size: 13px; font-family: var(--font-body); outline: none; transition: border-color 0.15s; }
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e7185' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+.form-check-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.form-check-row input { width: 14px; height: 14px; accent-color: var(--accent); }
+.form-check-row label { font-size: 13px; }
+
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M6 10h8M10 6v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Mock Server
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">概览</div>
+      <a class="nav-item" href="index.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="1.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
+        仪表盘
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Mock 服务</div>
+      <a class="nav-item" href="endpoints.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        端点管理
+      </a>
+      <a class="nav-item" href="logs.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2v12M6 5h7M6 8h5M6 11h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        请求日志
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">系统</div>
+      <a class="nav-item active" href="users.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        用户与权限
+      </a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="avatar">A</div>
+    <div><div style="color:var(--fg);font-weight:500;font-size:12px">admin</div><div style="font-size:11px">超级管理员</div></div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="page-header">
+    <h1>用户与权限</h1>
+    <div class="header-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">
+        <svg class="icon-moon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-7.5 5.12A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 1 5.5 5.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+      <button class="btn btn-sm btn-primary" onclick="openModal('userModal')">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        新建用户
+      </button>
+    </div>
+  </header>
+
+  <div class="page-body">
+    <div class="tabs">
+      <button class="tab active" data-tab="users" onclick="switchTab('users')">用户管理</button>
+      <button class="tab" data-tab="roles" onclick="switchTab('roles')">角色管理</button>
+      <button class="tab" data-tab="menus" onclick="switchTab('menus')">菜单权限</button>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-panel active" id="panel-users">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 9.5L13 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="搜索用户名或显示名…">
+        </div>
+      </div>
+      <div class="panel">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:40px">ID</th>
+              <th>用户名</th>
+              <th>显示名</th>
+              <th>角色</th>
+              <th style="width:70px">状态</th>
+              <th style="width:90px">超级管理员</th>
+              <th style="width:130px">最后登录</th>
+              <th style="width:90px;text-align:right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono muted">1</td>
+              <td><span class="mono" style="font-weight:500">admin</span></td>
+              <td>系统管理员</td>
+              <td><div class="role-tags"><span class="role-tag badge-accent">superadmin</span></div></td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td><span class="badge badge-accent">是</span></td>
+              <td class="mono muted" style="font-size:11px">06-23 14:22</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-8 8H2v-2l8-8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="重置密码"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3" y="6" width="8" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 6V4.5a2 2 0 014 0V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="mono muted">2</td>
+              <td><span class="mono" style="font-weight:500">tester</span></td>
+              <td>测试人员</td>
+              <td><div class="role-tags"><span class="role-tag badge-muted">tester</span></div></td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td><span class="muted" style="font-size:12px">—</span></td>
+              <td class="mono muted" style="font-size:11px">06-23 10:05</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-8 8H2v-2l8-8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="重置密码"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3" y="6" width="8" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 6V4.5a2 2 0 014 0V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+                <button class="btn-icon" title="删除" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="mono muted">3</td>
+              <td><span class="mono" style="font-weight:500">readonly</span></td>
+              <td>只读用户</td>
+              <td><div class="role-tags"><span class="role-tag badge-muted">readonly</span></div></td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td><span class="muted" style="font-size:12px">—</span></td>
+              <td class="mono muted" style="font-size:11px">06-22 16:40</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-8 8H2v-2l8-8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="重置密码"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3" y="6" width="8" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 6V4.5a2 2 0 014 0V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+                <button class="btn-icon" title="删除" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="mono muted">4</td>
+              <td><span class="mono" style="font-weight:500">devops-ci</span></td>
+              <td>CI 流水线</td>
+              <td><div class="role-tags"><span class="role-tag badge-muted">tester</span><span class="role-tag badge-muted">readonly</span></div></td>
+              <td><span class="badge badge-warn">停用</span></td>
+              <td><span class="muted" style="font-size:12px">—</span></td>
+              <td class="mono muted" style="font-size:11px">06-18 09:12</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-8 8H2v-2l8-8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="重置密码"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3" y="6" width="8" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 6V4.5a2 2 0 014 0V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>
+                <button class="btn-icon" title="删除" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Roles Tab -->
+    <div class="tab-panel" id="panel-roles">
+      <div class="toolbar">
+        <button class="btn btn-sm btn-primary" onclick="openModal('roleModal')">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          新建角色
+        </button>
+      </div>
+
+      <div class="panel" style="margin-bottom:20px">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:40px">ID</th>
+              <th>角色名称</th>
+              <th>编码</th>
+              <th style="width:70px">状态</th>
+              <th style="width:80px">用户数</th>
+              <th style="width:90px;text-align:right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono muted">1</td>
+              <td style="font-weight:500">超级管理员</td>
+              <td class="mono muted">superadmin</td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td class="mono">1</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑权限"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.7 3.4 12.5l.7-4L1.2 5.7l4-.6L7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="mono muted">2</td>
+              <td style="font-weight:500">测试人员</td>
+              <td class="mono muted">tester</td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td class="mono">2</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑权限"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.7 3.4 12.5l.7-4L1.2 5.7l4-.6L7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="删除" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+            <tr>
+              <td class="mono muted">3</td>
+              <td style="font-weight:500">只读用户</td>
+              <td class="mono muted">readonly</td>
+              <td><span class="badge badge-success">启用</span></td>
+              <td class="mono">2</td>
+              <td><div class="actions-cell">
+                <button class="btn-icon" title="编辑权限"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.7 3.4 12.5l.7-4L1.2 5.7l4-.6L7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+                <button class="btn-icon" title="删除" style="color:var(--danger)"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              </div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="panel">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+          <span style="font-size:13px;font-weight:550">权限矩阵 — 测试人员 (tester)</span>
+          <button class="btn btn-sm">保存更改</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="perm-matrix">
+            <thead>
+              <tr>
+                <th style="min-width:140px">菜单</th>
+                <th>查看</th>
+                <th>创建</th>
+                <th>编辑</th>
+                <th>删除</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Dashboard</td>
+                <td><input type="checkbox" class="perm-check" checked disabled></td>
+                <td><span class="muted">—</span></td>
+                <td><span class="muted">—</span></td>
+                <td><span class="muted">—</span></td>
+              </tr>
+              <tr>
+                <td>Endpoints</td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><input type="checkbox" class="perm-check"></td>
+              </tr>
+              <tr>
+                <td>WebSockets</td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><span class="muted">—</span></td>
+                <td><input type="checkbox" class="perm-check"></td>
+              </tr>
+              <tr>
+                <td>Logs</td>
+                <td><input type="checkbox" class="perm-check" checked></td>
+                <td><span class="muted">—</span></td>
+                <td><span class="muted">—</span></td>
+                <td><input type="checkbox" class="perm-check"></td>
+              </tr>
+              <tr>
+                <td>Settings</td>
+                <td><input type="checkbox" class="perm-check"></td>
+                <td><span class="muted">—</span></td>
+                <td><span class="muted">—</span></td>
+                <td><span class="muted">—</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Menus Tab -->
+    <div class="tab-panel" id="panel-menus">
+      <div class="toolbar">
+        <button class="btn btn-sm btn-primary">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          新建菜单
+        </button>
+      </div>
+      <div class="panel" style="padding:20px">
+        <div class="tree-node">
+          <div class="tree-node-label">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="5" height="5" rx="1" stroke="var(--accent)" stroke-width="1.2"/><rect x="8" y="1" width="5" height="5" rx="1" stroke="var(--accent)" stroke-width="1.2"/><rect x="1" y="8" width="5" height="5" rx="1" stroke="var(--accent)" stroke-width="1.2"/><rect x="8" y="8" width="5" height="5" rx="1" stroke="var(--accent)" stroke-width="1.2"/></svg>
+            <span style="font-weight:500">Dashboard</span>
+            <span class="path">/admin/</span>
+            <span class="badge badge-success" style="margin-left:8px">启用</span>
+          </div>
+        </div>
+        <div class="tree-node">
+          <div class="tree-node-label">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h10M2 7h10M2 10h6" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span style="font-weight:500">Endpoints</span>
+            <span class="path">/admin/endpoints</span>
+            <span class="badge badge-success" style="margin-left:8px">启用</span>
+          </div>
+          <div class="tree-children">
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">├</span>
+                <span>List Endpoints</span>
+                <span class="path">/admin/endpoints</span>
+              </div>
+            </div>
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">└</span>
+                <span>Add Endpoint</span>
+                <span class="path">/admin/endpoints/new</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tree-node">
+          <div class="tree-node-label">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3v8M6 5h5M6 8h3" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span style="font-weight:500">WebSockets</span>
+            <span class="path">/admin/websocket-channels</span>
+            <span class="badge badge-success" style="margin-left:8px">启用</span>
+          </div>
+          <div class="tree-children">
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">├</span>
+                <span>List Channels</span>
+                <span class="path">/admin/websocket-channels</span>
+              </div>
+            </div>
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">└</span>
+                <span>Add Channel</span>
+                <span class="path">/admin/websocket-channels/new</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tree-node">
+          <div class="tree-node-label">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 2v10M6 4h5M6 7h4M6 10h5" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span style="font-weight:500">Logs</span>
+            <span class="path">/admin/logs</span>
+            <span class="badge badge-success" style="margin-left:8px">启用</span>
+          </div>
+        </div>
+        <div class="tree-node">
+          <div class="tree-node-label">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.5" stroke="var(--accent)" stroke-width="1.2"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M2.8 11.2l1.4-1.4M9.8 4.2l1.4-1.4" stroke="var(--accent)" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <span style="font-weight:500">Settings</span>
+            <span class="path">/admin/settings</span>
+            <span class="badge badge-success" style="margin-left:8px">启用</span>
+          </div>
+          <div class="tree-children">
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">├</span>
+                <span>User Management</span>
+                <span class="path">/admin/settings/users</span>
+              </div>
+            </div>
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">├</span>
+                <span>Role Management</span>
+                <span class="path">/admin/settings/roles</span>
+              </div>
+            </div>
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">├</span>
+                <span>Menu Management</span>
+                <span class="path">/admin/settings/menus</span>
+              </div>
+            </div>
+            <div class="tree-node">
+              <div class="tree-node-label">
+                <span class="icon">└</span>
+                <span>System Config</span>
+                <span class="path">/admin/settings/config</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Create User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">新建用户</span>
+      <button class="btn-icon" onclick="closeModal('userModal')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">用户名</label>
+        <input class="form-input" type="text" placeholder="例如: developer1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">显示名称</label>
+        <input class="form-input" type="text" placeholder="例如: 开发工程师">
+      </div>
+      <div class="form-group">
+        <label class="form-label">初始密码</label>
+        <input class="form-input" type="password" placeholder="至少 6 位">
+      </div>
+      <div class="form-group">
+        <label class="form-label">分配角色</label>
+        <div class="form-check-row"><input type="checkbox" id="r1"><label for="r1">超级管理员</label></div>
+        <div class="form-check-row"><input type="checkbox" id="r2" checked><label for="r2">测试人员</label></div>
+        <div class="form-check-row"><input type="checkbox" id="r3"><label for="r3">只读用户</label></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">状态</label>
+        <select class="form-select">
+          <option>启用</option>
+          <option>停用</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('userModal')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('userModal')">创建用户</button>
+    </div>
+  </div>
+</div>
+
+<!-- Create Role Modal -->
+<div class="modal-overlay" id="roleModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">新建角色</span>
+      <button class="btn-icon" onclick="closeModal('roleModal')"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">角色名称</label>
+        <input class="form-input" type="text" placeholder="例如: 高级测试">
+      </div>
+      <div class="form-group">
+        <label class="form-label">角色编码</label>
+        <input class="form-input" type="text" placeholder="例如: senior_tester" style="font-family:var(--font-mono);font-size:12px">
+      </div>
+      <div class="form-group">
+        <label class="form-label">状态</label>
+        <select class="form-select">
+          <option>启用</option>
+          <option>停用</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('roleModal')">取消</button>
+      <button class="btn btn-primary" onclick="closeModal('roleModal')">创建角色</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var API_BASE = '/admin/api';
+
+async function apiRequest(path, options) {
+  try {
+    var resp = await fetch(API_BASE + path, Object.assign({
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin'
+    }, options || {}));
+    if (resp.status === 401) { location.href = 'login.html'; return null; }
+    if (resp.status === 403) { showToast('权限不足', 'danger'); return null; }
+    return await resp.json();
+  } catch (err) {
+    return { code: 0, message: '网络错误: ' + err.message, data: null };
+  }
+}
+
+function showToast(msg, type) {
+  type = type || 'success';
+  var el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;padding:10px 20px;border-radius:6px;font-size:13px;font-weight:500;color:#fff;opacity:0;transition:opacity 0.3s;pointer-events:none;';
+  el.style.background = type === 'danger' ? 'var(--danger)' : type === 'warn' ? 'var(--warn)' : 'var(--success)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  requestAnimationFrame(function() { el.style.opacity = '1'; });
+  setTimeout(function() { el.style.opacity = '0'; setTimeout(function() { el.remove(); }, 300); }, 2500);
+}
+
+function setLoading(panelId, loading) {
+  var panel = document.getElementById(panelId);
+  if (!panel) return;
+  var overlay = panel.querySelector('.loading-overlay');
+  if (loading) {
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.style.cssText = 'position:absolute;inset:0;background:var(--bg);opacity:0.6;display:flex;align-items:center;justify-content:center;z-index:10;';
+      overlay.innerHTML = '<div style="color:var(--muted);font-size:13px">加载中…</div>';
+      panel.style.position = 'relative';
+      panel.appendChild(overlay);
+    }
+  } else {
+    if (overlay) overlay.remove();
+  }
+}
+
+function renderEmpty(colspan, msg) {
+  return '<tr><td colspan="' + colspan + '" style="text-align:center;padding:40px 16px;color:var(--muted);font-size:13px">' + (msg || '暂无数据') + '</td></tr>';
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.getElementById('panel-' + tab).classList.add('active');
+  if (tab === 'users') loadUsers();
+  else if (tab === 'roles') loadRoles();
+  else if (tab === 'menus') loadPermissionMatrix();
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.classList.remove('open');
+  });
+});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m) { m.classList.remove('open'); });
+  }
+});
+
+(function() {
+  var t = document.getElementById('themeToggle');
+  var s = localStorage.getItem('mock-server-theme');
+  if (s === 'light' || (!s && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+  t.addEventListener('click', function() {
+    var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('mock-server-theme', 'dark'); }
+    else { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('mock-server-theme', 'light'); }
+  });
+})();
+
+var allRoles = [];
+var userSearchKeyword = '';
+var userPage = 1;
+var editingUserId = null;
+var editingRoleId = null;
+
+function formatDate(d) {
+  if (!d) return '<span class="muted">—</span>';
+  var dt = new Date(d);
+  var mm = String(dt.getMonth() + 1).padStart(2, '0');
+  var dd = String(dt.getDate()).padStart(2, '0');
+  var hh = String(dt.getHours()).padStart(2, '0');
+  var mi = String(dt.getMinutes()).padStart(2, '0');
+  return mm + '-' + dd + ' ' + hh + ':' + mi;
+}
+
+async function loadUsers() {
+  setLoading('panel-users', true);
+  var res = await apiRequest('/users?page=' + userPage + '&page_size=20&keyword=' + encodeURIComponent(userSearchKeyword));
+  setLoading('panel-users', false);
+  if (!res) return;
+  var users = (res.data && res.data.items) || [];
+  renderUserTable(users);
+}
+
+function renderUserTable(users) {
+  var tbody = document.querySelector('#panel-users .data-table tbody');
+  if (!users.length) { tbody.innerHTML = renderEmpty(8); return; }
+  var html = '';
+  users.forEach(function(u) {
+    var rolesHtml = '';
+    if (u.roles && u.roles.length) {
+      u.roles.forEach(function(r) {
+        var cls = (r.code === 'superadmin' || r.name === 'superadmin') ? 'badge-accent' : 'badge-muted';
+        rolesHtml += '<span class="role-tag ' + cls + '">' + (r.name || r) + '</span>';
+      });
+    } else {
+      rolesHtml = '<span class="muted" style="font-size:12px">—</span>';
+    }
+    var statusBadge = u.is_active !== false && u.is_active !== 0
+      ? '<span class="badge badge-success">启用</span>'
+      : '<span class="badge badge-warn">停用</span>';
+    var isSuper = (u.roles || []).some(function(r) { return r.code === 'superadmin' || r.name === 'superadmin'; });
+    var superBadge = isSuper ? '<span class="badge badge-accent">是</span>' : '<span class="muted" style="font-size:12px">—</span>';
+    var deleteBtn = isSuper ? '' : '<button class="btn-icon" title="删除" style="color:var(--danger)" onclick="deleteUser(' + u.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    html += '<tr>'
+      + '<td class="mono muted">' + u.id + '</td>'
+      + '<td><span class="mono" style="font-weight:500">' + (u.username || '') + '</span></td>'
+      + '<td>' + (u.display_name || '') + '</td>'
+      + '<td><div class="role-tags">' + rolesHtml + '</div></td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td>' + superBadge + '</td>'
+      + '<td class="mono muted" style="font-size:11px">' + formatDate(u.last_login_at || u.created_at) + '</td>'
+      + '<td><div class="actions-cell">'
+      + '<button class="btn-icon" title="编辑" onclick="openEditUser(' + u.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-8 8H2v-2l8-8z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>'
+      + '<button class="btn-icon" title="重置密码" onclick="resetPassword(' + u.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="3" y="6" width="8" height="6" rx="1" stroke="currentColor" stroke-width="1.2"/><path d="M5 6V4.5a2 2 0 014 0V6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></button>'
+      + deleteBtn
+      + '</div></td></tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+async function loadRolesForSelect() {
+  var res = await apiRequest('/roles');
+  if (!res) return;
+  allRoles = (res.data && res.data.list) || res.data || [];
+  if (!Array.isArray(allRoles)) allRoles = [];
+}
+
+function populateRoleCheckboxes() {
+  var container = document.querySelector('#userModal .form-group:last-of-type');
+  var formGroups = document.querySelectorAll('#userModal .form-group');
+  var roleGroup = null;
+  formGroups.forEach(function(g) {
+    var label = g.querySelector('.form-label');
+    if (label && label.textContent.trim() === '分配角色') roleGroup = g;
+  });
+  if (!roleGroup) return;
+  var html = '<label class="form-label">分配角色</label>';
+  allRoles.forEach(function(r) {
+    html += '<div class="form-check-row"><input type="checkbox" value="' + r.id + '" id="role_ck_' + r.id + '"><label for="role_ck_' + r.id + '">' + (r.name || r.code || '') + '</label></div>';
+  });
+  roleGroup.innerHTML = html;
+}
+
+async function openEditUser(id) {
+  editingUserId = id;
+  var res = await apiRequest('/users/' + id);
+  if (!res || !res.data) return;
+  var u = res.data;
+  var modal = document.getElementById('userModal');
+  modal.querySelector('.modal-title').textContent = '编辑用户';
+  var inputs = modal.querySelectorAll('.form-input');
+  inputs[0].value = u.username || '';
+  inputs[1].value = u.display_name || '';
+  inputs[2].value = '';
+  inputs[2].placeholder = '留空则不修改';
+  var select = modal.querySelector('.form-select');
+  select.value = (u.is_active !== false && u.is_active !== 0) ? '启用' : '停用';
+  await loadRolesForSelect();
+  populateRoleCheckboxes();
+  var userRoleIds = (u.roles || []).map(function(r) { return r.id; });
+  allRoles.forEach(function(r) {
+    var ck = document.getElementById('role_ck_' + r.id);
+    if (ck) ck.checked = userRoleIds.indexOf(r.id) !== -1;
+  });
+  var footer = modal.querySelector('.modal-footer');
+  var btns = footer.querySelectorAll('.btn');
+  btns[btns.length - 1].textContent = '保存';
+  btns[btns.length - 1].setAttribute('onclick', 'submitUserForm()');
+  openModal('userModal');
+}
+
+function resetUserModal() {
+  editingUserId = null;
+  var modal = document.getElementById('userModal');
+  modal.querySelector('.modal-title').textContent = '新建用户';
+  var inputs = modal.querySelectorAll('.form-input');
+  inputs.forEach(function(inp) { inp.value = ''; });
+  inputs[2].placeholder = '至少 6 位';
+  var select = modal.querySelector('.form-select');
+  select.value = '启用';
+  var footer = modal.querySelector('.modal-footer');
+  var btns = footer.querySelectorAll('.btn');
+  btns[btns.length - 1].textContent = '创建用户';
+  btns[btns.length - 1].setAttribute('onclick', 'submitUserForm()');
+  populateRoleCheckboxes();
+}
+
+async function submitUserForm() {
+  var modal = document.getElementById('userModal');
+  var inputs = modal.querySelectorAll('.form-input');
+  var username = inputs[0].value.trim();
+  var display_name = inputs[1].value.trim();
+  var password = inputs[2].value;
+  var select = modal.querySelector('.form-select');
+  var is_active = select.value === '启用';
+  var role_ids = [];
+  modal.querySelectorAll('.form-check-row input:checked').forEach(function(ck) {
+    role_ids.push(parseInt(ck.value));
+  });
+  if (!username) { showToast('请输入用户名', 'warn'); return; }
+  var data = { username: username, display_name: display_name, is_active: is_active, role_ids: role_ids };
+  if (password) data.password = password;
+  var res;
+  if (editingUserId) {
+    res = await apiRequest('/users/' + editingUserId, { method: 'PUT', body: JSON.stringify(data) });
+  } else {
+    if (!password) { showToast('请输入初始密码', 'warn'); return; }
+    res = await apiRequest('/users', { method: 'POST', body: JSON.stringify(data) });
+  }
+  if (!res || res.code >= 400) { showToast(res ? res.message : '网络错误', 'danger'); return; }
+  showToast(editingUserId ? '用户已更新' : '用户已创建');
+  closeModal('userModal');
+  resetUserModal();
+  loadUsers();
+}
+
+async function deleteUser(id) {
+  if (!confirm('确定要删除该用户吗？此操作不可撤销。')) return;
+  var res = await apiRequest('/users/' + id, { method: 'DELETE' });
+  if (!res || res.code >= 400) { showToast(res ? res.message : '网络错误', 'danger'); return; }
+  showToast('用户已删除');
+  loadUsers();
+}
+
+async function resetPassword(id) {
+  if (!confirm('确定要重置该用户的密码吗？')) return;
+  var res = await apiRequest('/users/' + id + '/reset-password', { method: 'POST' });
+  if (!res || res.code >= 400) { showToast(res ? res.message : '网络错误', 'danger'); return; }
+  if (res) {
+    var newPwd = (res.data && res.data.new_password) || '';
+    showToast(newPwd ? '密码已重置为: ' + newPwd : '密码已重置');
+  }
+}
+
+async function loadRoles() {
+  setLoading('panel-roles', true);
+  var res = await apiRequest('/roles');
+  setLoading('panel-roles', false);
+  if (!res) return;
+  allRoles = (res.data && res.data.list) || res.data || [];
+  if (!Array.isArray(allRoles)) allRoles = [];
+  renderRoleTable(allRoles);
+}
+
+function renderRoleTable(roles) {
+  var tbody = document.querySelector('#panel-roles .data-table tbody');
+  if (!roles.length) { tbody.innerHTML = renderEmpty(6); return; }
+  var html = '';
+  roles.forEach(function(r) {
+    var statusBadge = r.is_active !== false && r.is_active !== 0
+      ? '<span class="badge badge-success">启用</span>'
+      : '<span class="badge badge-warn">停用</span>';
+    var isSuper = r.code === 'superadmin';
+    var deleteBtn = isSuper ? '' : '<button class="btn-icon" title="删除" style="color:var(--danger)" onclick="deleteRole(' + r.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5 4V3a1 1 0 011-1h2a1 1 0 011 1v1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>';
+    html += '<tr>'
+      + '<td class="mono muted">' + r.id + '</td>'
+      + '<td style="font-weight:500">' + (r.name || '') + '</td>'
+      + '<td class="mono muted">' + (r.code || '') + '</td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td class="mono">' + (r.user_count || 0) + '</td>'
+      + '<td><div class="actions-cell">'
+      + '<button class="btn-icon" title="编辑" onclick="openEditRole(' + r.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1.5l1.8 3.6 4 .6-2.9 2.8.7 4L7 10.7 3.4 12.5l.7-4L1.2 5.7l4-.6L7 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>'
+      + deleteBtn
+      + '</div></td></tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+async function openEditRole(id) {
+  editingRoleId = id;
+  var role = allRoles.find(function(r) { return r.id === id; });
+  if (!role) return;
+  var modal = document.getElementById('roleModal');
+  modal.querySelector('.modal-title').textContent = '编辑角色';
+  var inputs = modal.querySelectorAll('.form-input');
+  inputs[0].value = role.name || '';
+  inputs[1].value = role.code || '';
+  var select = modal.querySelector('.form-select');
+  select.value = (role.is_active !== false && role.is_active !== 0) ? '启用' : '停用';
+  var footer = modal.querySelector('.modal-footer');
+  var btns = footer.querySelectorAll('.btn');
+  btns[btns.length - 1].textContent = '保存';
+  btns[btns.length - 1].setAttribute('onclick', 'submitRoleForm()');
+  openModal('roleModal');
+}
+
+function resetRoleModal() {
+  editingRoleId = null;
+  var modal = document.getElementById('roleModal');
+  modal.querySelector('.modal-title').textContent = '新建角色';
+  var inputs = modal.querySelectorAll('.form-input');
+  inputs.forEach(function(inp) { inp.value = ''; });
+  var select = modal.querySelector('.form-select');
+  select.value = '启用';
+  var footer = modal.querySelector('.modal-footer');
+  var btns = footer.querySelectorAll('.btn');
+  btns[btns.length - 1].textContent = '创建角色';
+  btns[btns.length - 1].setAttribute('onclick', 'submitRoleForm()');
+}
+
+async function submitRoleForm() {
+  var modal = document.getElementById('roleModal');
+  var inputs = modal.querySelectorAll('.form-input');
+  var name = inputs[0].value.trim();
+  var code = inputs[1].value.trim();
+  var select = modal.querySelector('.form-select');
+  var is_active = select.value === '启用';
+  if (!name || !code) { showToast('请填写完整信息', 'warn'); return; }
+  var data = { name: name, code: code, is_active: is_active };
+  var res;
+  if (editingRoleId) {
+    res = await apiRequest('/roles/' + editingRoleId, { method: 'PUT', body: JSON.stringify(data) });
+  } else {
+    res = await apiRequest('/roles', { method: 'POST', body: JSON.stringify(data) });
+  }
+  if (!res || res.code >= 400) { showToast(res ? res.message : '网络错误', 'danger'); return; }
+  showToast(editingRoleId ? '角色已更新' : '角色已创建');
+  closeModal('roleModal');
+  resetRoleModal();
+  loadRoles();
+}
+
+async function deleteRole(id) {
+  if (!confirm('确定要删除该角色吗？此操作不可撤销。')) return;
+  var res = await apiRequest('/roles/' + id, { method: 'DELETE' });
+  if (!res || res.code >= 400) { showToast(res ? res.message : '网络错误', 'danger'); return; }
+  showToast('角色已删除');
+  loadRoles();
+}
+
+var matrixRoles = [];
+var matrixMenus = [];
+
+async function loadPermissionMatrix() {
+  setLoading('panel-menus', true);
+  var rolesRes = await apiRequest('/roles');
+  var menusRes = await apiRequest('/menus/tree');
+  if (!rolesRes || !menusRes) { setLoading('panel-menus', false); return; }
+  matrixRoles = (rolesRes.data && rolesRes.data.list) || rolesRes.data || [];
+  if (!Array.isArray(matrixRoles)) matrixRoles = [];
+  matrixMenus = (menusRes.data && (menusRes.data.list || menusRes.data.tree)) || menusRes.data || [];
+  if (!Array.isArray(matrixMenus)) matrixMenus = [];
+  // 拉取每个角色的现有权限
+  for (var i = 0; i < matrixRoles.length; i++) {
+    var role = matrixRoles[i];
+    var permRes = await apiRequest('/roles/' + role.id + '/permissions');
+    role.perm_map = {};
+    if (permRes && permRes.code === 200 && Array.isArray(permRes.data)) {
+      permRes.data.forEach(function(mp) {
+        role.perm_map[mp.menu_id] = mp.permissions || [];
+      });
+    }
+  }
+  setLoading('panel-menus', false);
+  renderPermissionMatrix();
+}
+
+function flattenMenus(menus, result) {
+  result = result || [];
+  menus.forEach(function(m) {
+    result.push(m);
+    if (m.children && m.children.length) flattenMenus(m.children, result);
+  });
+  return result;
+}
+
+function renderPermissionMatrix() {
+  var panel = document.getElementById('panel-menus');
+  var existing = panel.querySelector('.perm-matrix-wrapper');
+  if (existing) existing.remove();
+
+  if (!matrixRoles.length || !matrixMenus.length) {
+    var emptyDiv = document.createElement('div');
+    emptyDiv.className = 'perm-matrix-wrapper';
+    emptyDiv.innerHTML = '<div class="panel" style="padding:40px;text-align:center;color:var(--muted);font-size:13px">暂无权限数据</div>';
+    panel.appendChild(emptyDiv);
+    return;
+  }
+
+  var flatMenus = flattenMenus(matrixMenus);
+  var wrapper = document.createElement('div');
+  wrapper.className = 'perm-matrix-wrapper';
+
+  matrixRoles.forEach(function(role) {
+    var perm_map = role.perm_map || {};
+    var permSet = {};
+    Object.keys(perm_map).forEach(function(mid) {
+      (perm_map[mid] || []).forEach(function(action) { permSet[mid + '_' + action] = true; });
+    });
+
+    var section = document.createElement('div');
+    section.className = 'panel';
+    section.style.marginBottom = '20px';
+    var header = '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
+      + '<span style="font-size:13px;font-weight:550">权限矩阵 — ' + (role.name || '') + ' (' + (role.code || '') + ')</span>'
+      + '<button class="btn btn-sm" onclick="saveRolePermissions(' + role.id + ', this)">保存更改</button></div>';
+    var table = '<div style="overflow-x:auto"><table class="perm-matrix"><thead><tr><th style="min-width:140px">菜单</th><th>查看</th><th>创建</th><th>编辑</th><th>删除</th></tr></thead><tbody>';
+
+    flatMenus.forEach(function(menu) {
+      var actions = ['view', 'create', 'edit', 'delete'];
+      var row = '<tr><td>' + (menu.name || menu.title || '') + '</td>';
+      actions.forEach(function(action) {
+        var checked = permSet[menu.id + '_' + action] ? ' checked' : '';
+        row += '<td><input type="checkbox" class="perm-check" data-role-id="' + role.id + '" data-menu-id="' + menu.id + '" data-action="' + action + '"' + checked + ' onchange="onPermChange(this)"></td>';
+      });
+      row += '</tr>';
+      table += row;
+    });
+
+    table += '</tbody></table></div>';
+    section.innerHTML = header + table;
+    wrapper.appendChild(section);
+  });
+
+  panel.appendChild(wrapper);
+}
+
+function onPermChange(checkbox) {
+  checkbox.setAttribute('data-dirty', 'true');
+}
+
+async function saveRolePermissions(roleId, btn) {
+  var checkboxes = document.querySelectorAll('.perm-check[data-role-id="' + roleId + '"]');
+  var byMenu = {};
+  checkboxes.forEach(function(ck) {
+    var mid = parseInt(ck.dataset.menuId);
+    if (!byMenu[mid]) byMenu[mid] = [];
+    if (ck.checked) byMenu[mid].push(ck.dataset.action);
+  });
+  var menu_permissions = Object.keys(byMenu).map(function(mid) {
+    return { menu_id: parseInt(mid), permissions: byMenu[mid] };
+  });
+  var res = await apiRequest('/roles/' + roleId + '/permissions', {
+    method: 'PUT',
+    body: JSON.stringify({ menu_permissions: menu_permissions })
+  });
+  if (res && res.code !== 200) { showToast(res.message || '保存失败', 'danger'); return; }
+  if (res) showToast('权限已保存');
+  await loadPermissionMatrix();
+}
+
+var searchTimer = null;
+document.querySelector('#panel-users .search-box input').addEventListener('input', function(e) {
+  clearTimeout(searchTimer);
+  var val = e.target.value;
+  searchTimer = setTimeout(function() {
+    userSearchKeyword = val;
+    userPage = 1;
+    loadUsers();
+  }, 300);
+});
+
+document.querySelector('.header-actions .btn-primary').setAttribute('onclick', 'resetUserModal();openModal("userModal")');
+document.querySelector('#panel-roles .btn-primary').setAttribute('onclick', 'resetRoleModal();openModal("roleModal")');
+
+loadUsers();
+loadRolesForSelect();
+</script>
+</body>
+</html>

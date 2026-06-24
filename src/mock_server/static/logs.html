@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Server — 请求日志</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #161922;
+  --surface-2: #1c1f2b;
+  --fg: #e2e4ea;
+  --muted: #6e7185;
+  --border: #272a37;
+  --accent: #4c8bf5;
+  --accent-dim: oklch(45% 0.14 250 / 0.15);
+  --success: #34d399;
+  --success-dim: oklch(55% 0.14 160 / 0.12);
+  --warn: #fbbf24;
+  --warn-dim: oklch(65% 0.14 85 / 0.12);
+  --danger: #f87171;
+  --danger-dim: oklch(55% 0.16 25 / 0.12);
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, monospace;
+  --sidebar-w: 240px;
+  --header-h: 56px;
+  --radius: 6px;
+}
+[data-theme="light"] {
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f0f1f4;
+  --fg: #1a1c22; --muted: #6b7084; --border: #dfe1e6;
+  --accent: #4c8bf5; --accent-dim: oklch(92% 0.04 250);
+  --success: #16a34a; --success-dim: oklch(94% 0.04 150);
+  --warn: #d97706; --warn-dim: oklch(94% 0.04 80);
+  --danger: #dc2626; --danger-dim: oklch(94% 0.04 25);
+}
+:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); border-radius: var(--radius); }
+.theme-toggle { background: none; border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: var(--radius); display: grid; place-items: center; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s; }
+.theme-toggle:hover { background: var(--surface-2); color: var(--fg); border-color: var(--border-hover, var(--border)); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; }
+body { font-family: var(--font-body); background: var(--bg); color: var(--fg); line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+a { color: var(--accent); text-decoration: none; }
+
+.sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
+.sidebar-brand { height: var(--header-h); display: flex; align-items: center; gap: 10px; padding: 0 20px; border-bottom: 1px solid var(--border); font-family: var(--font-display); font-weight: 600; font-size: 15px; letter-spacing: -0.01em; }
+.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.nav-section { margin-bottom: 20px; }
+.nav-section-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; padding: 0 12px 6px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--radius); color: var(--muted); font-size: 13px; font-weight: 450; transition: background 0.12s, color 0.12s; cursor: pointer; text-decoration: none; }
+.nav-item:hover { background: var(--surface-2); color: var(--fg); text-decoration: none; }
+.nav-item.active { background: var(--accent-dim); color: var(--accent); }
+.nav-item svg { flex-shrink: 0; opacity: 0.7; }
+.nav-item.active svg { opacity: 1; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
+
+.main { margin-left: var(--sidebar-w); min-height: 100vh; display: flex; flex-direction: column; }
+.page-header { height: var(--header-h); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 50; flex-shrink: 0; }
+.page-header h1 { font-family: var(--font-display); font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 500; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg); cursor: pointer; transition: background 0.12s; font-family: var(--font-body); }
+.btn:hover { background: var(--border); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-icon { padding: 6px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--radius); }
+.btn-icon:hover { background: var(--surface-2); color: var(--fg); }
+
+.content-wrap { flex: 1; display: flex; overflow: hidden; }
+.log-list { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.log-detail { width: 420px; border-left: 1px solid var(--border); background: var(--surface); overflow-y: auto; flex-shrink: 0; display: none; }
+.log-detail.open { display: block; }
+
+.toolbar { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; flex-wrap: wrap; }
+.search-box { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 0 10px; flex: 1; max-width: 260px; }
+.search-box input { background: none; border: none; color: var(--fg); font-size: 12px; font-family: var(--font-body); padding: 7px 0; outline: none; width: 100%; }
+.search-box input::placeholder { color: var(--muted); opacity: 0.6; }
+.filter-group { display: flex; gap: 3px; }
+.filter-chip { padding: 4px 8px; font-size: 10px; font-weight: 500; font-family: var(--font-mono); letter-spacing: 0.03em; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--muted); cursor: pointer; transition: all 0.12s; }
+.filter-chip:hover { border-color: var(--muted); color: var(--fg); }
+.filter-chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.time-select { padding: 5px 10px; font-size: 11px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--fg); font-family: var(--font-body); outline: none; cursor: pointer; appearance: none; padding-right: 24px; background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e7185' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+
+.log-table-wrap { flex: 1; overflow-y: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { text-align: left; padding: 8px 14px; font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); background: var(--surface-2); position: sticky; top: 0; z-index: 5; }
+.data-table td { padding: 7px 14px; font-size: 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.data-table tr { cursor: pointer; transition: background 0.08s; }
+.data-table tbody tr:hover { background: oklch(20% 0.01 250 / 0.5); }
+.data-table tbody tr.selected { background: var(--accent-dim); }
+
+.method { display: inline-block; font-family: var(--font-mono); font-size: 9px; font-weight: 600; letter-spacing: 0.04em; padding: 2px 5px; border-radius: 3px; min-width: 36px; text-align: center; }
+.method.get { background: oklch(55% 0.14 160 / 0.15); color: var(--success); }
+.method.post { background: var(--accent-dim); color: var(--accent); }
+.method.put { background: var(--warn-dim); color: var(--warn); }
+.method.delete { background: var(--danger-dim); color: var(--danger); }
+.method.patch { background: oklch(55% 0.12 310 / 0.15); color: oklch(70% 0.14 310); }
+
+.path-text { font-family: var(--font-mono); font-size: 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mono { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.status-code { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.status-code.s2xx { color: var(--success); }
+.status-code.s4xx { color: var(--warn); }
+.status-code.s5xx { color: var(--danger); }
+
+.detail-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.detail-title { font-size: 13px; font-weight: 550; }
+.detail-body { padding: 0; }
+.detail-section { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.detail-section-title { font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+.detail-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.detail-meta-item label { display: block; font-size: 10px; color: var(--muted); letter-spacing: 0.02em; margin-bottom: 2px; }
+.detail-meta-item span { font-family: var(--font-mono); font-size: 12px; }
+.code-block { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; overflow-x: auto; white-space: pre-wrap; word-break: break-all; color: var(--fg); max-height: 240px; overflow-y: auto; }
+.code-block .key { color: var(--accent); }
+.code-block .str { color: var(--success); }
+.code-block .num { color: var(--warn); }
+
+.log-count { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.02em; padding: 8px 20px; border-top: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+
+@keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 1024px) {
+  .log-detail { width: 100%; position: fixed; top: var(--header-h); right: 0; bottom: 0; z-index: 60; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M6 10h8M10 6v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    Mock Server
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section">
+      <div class="nav-section-label">概览</div>
+      <a class="nav-item" href="index.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="1.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="1.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2"/></svg>
+        仪表盘
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Mock 服务</div>
+      <a class="nav-item" href="endpoints.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        端点管理
+      </a>
+      <a class="nav-item active" href="logs.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 2v12M6 5h7M6 8h5M6 11h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        请求日志
+      </a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">系统</div>
+      <a class="nav-item" href="users.html">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+        用户与权限
+      </a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="avatar">A</div>
+    <div><div style="color:var(--fg);font-weight:500;font-size:12px">admin</div><div style="font-size:11px">超级管理员</div></div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="page-header">
+    <h1>请求日志</h1>
+    <div class="header-actions">
+      <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">
+        <svg class="icon-moon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-7.5 5.12A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 1 5.5 5.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+        <svg class="icon-sun" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </button>
+      <span class="mono muted" style="font-size:11px">自动刷新: 5s</span>
+      <button class="btn btn-sm" onclick="clearLogs()">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 3h8l-.4 6.5a1 1 0 01-1 .5H3.4a1 1 0 01-1-.5L2 3zM4.5 3V2.5a1 1 0 011-1h1a1 1 0 011 1V3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        清除日志
+      </button>
+    </div>
+  </header>
+
+  <div class="content-wrap">
+    <div class="log-list">
+      <div class="toolbar">
+        <div class="search-box">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.2"/><path d="M9.5 9.5L13 13" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="搜索路径、IP…" id="logSearch">
+        </div>
+        <div class="filter-group">
+          <button class="filter-chip active" data-f="all">ALL</button>
+          <button class="filter-chip" data-f="2xx">2xx</button>
+          <button class="filter-chip" data-f="4xx">4xx</button>
+          <button class="filter-chip" data-f="5xx">5xx</button>
+        </div>
+        <select class="time-select" id="timeRange">
+          <option value="1h">最近 1 小时</option>
+          <option value="6h">最近 6 小时</option>
+          <option value="24h" selected>今天</option>
+          <option value="7d">最近 7 天</option>
+        </select>
+      </div>
+
+      <div class="log-table-wrap">
+        <table class="data-table" id="logTable">
+          <thead>
+            <tr>
+              <th style="width:72px">时间</th>
+              <th style="width:56px">方法</th>
+              <th>路径</th>
+              <th style="width:52px">状态</th>
+              <th style="width:56px">耗时</th>
+              <th style="width:100px">来源 IP</th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+      <div class="log-count" id="logCount">显示 24 条记录 / 共 1,247 条</div>
+    </div>
+
+    <div class="log-detail" id="detailPanel">
+      <div class="detail-header">
+        <span class="detail-title">请求详情</span>
+        <button class="btn-icon" onclick="closeDetail()"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section">
+          <div class="detail-section-title">基本信息</div>
+          <div class="detail-meta">
+            <div class="detail-meta-item"><label>方法</label><span id="dMethod">GET</span></div>
+            <div class="detail-meta-item"><label>状态码</label><span id="dStatus" class="status-code s2xx">200</span></div>
+            <div class="detail-meta-item"><label>耗时</label><span id="dDuration">12ms</span></div>
+            <div class="detail-meta-item"><label>来源</label><span id="dIp">192.168.1.42</span></div>
+          </div>
+          <div style="margin-top:10px">
+            <label style="display:block;font-size:10px;color:var(--muted);letter-spacing:0.02em;margin-bottom:2px">路径</label>
+            <span class="mono" id="dPath" style="font-size:12px">/api/users</span>
+          </div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">请求头</div>
+          <div class="code-block" id="dReqHeaders"><span class="key">"Host"</span>: <span class="str">"localhost:8080"</span>
+<span class="key">"User-Agent"</span>: <span class="str">"httpx/0.27.0"</span>
+<span class="key">"Accept"</span>: <span class="str">"application/json"</span>
+<span class="key">"Content-Type"</span>: <span class="str">"application/json"</span></div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">请求体</div>
+          <div class="code-block" id="dReqBody"><span class="muted">— 无请求体 —</span></div>
+        </div>
+        <div class="detail-section">
+          <div class="detail-section-title">响应体</div>
+          <div class="code-block" id="dRespBody">{
+  <span class="key">"code"</span>: <span class="num">200</span>,
+  <span class="key">"data"</span>: {
+    <span class="key">"users"</span>: [
+      { <span class="key">"id"</span>: <span class="num">1</span>, <span class="key">"name"</span>: <span class="str">"张三"</span> },
+      { <span class="key">"id"</span>: <span class="num">2</span>, <span class="key">"name"</span>: <span class="str">"李四"</span> }
+    ],
+    <span class="key">"total"</span>: <span class="num">2</span>
+  }
+}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" style="position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px"></div>
+
+<script>
+var API_BASE = '/admin/api';
+var currentFilters = { status_code: 'all', time_range: '24h', keyword: '' };
+var selectedRow = null;
+var searchTimer = null;
+
+function showToast(message, type) {
+  var container = document.getElementById('toastContainer');
+  var toast = document.createElement('div');
+  var colors = { success: 'var(--success)', danger: 'var(--danger)', warn: 'var(--warn)', info: 'var(--accent)' };
+  var bgs = { success: 'var(--success-dim)', danger: 'var(--danger-dim)', warn: 'var(--warn-dim)', info: 'var(--accent-dim)' };
+  toast.style.cssText = 'padding:10px 16px;border-radius:var(--radius);font-size:12px;font-weight:500;color:' + (colors[type] || colors.info) + ';background:' + (bgs[type] || bgs.info) + ';border:1px solid ' + (colors[type] || colors.info) + ';box-shadow:0 4px 12px rgba(0,0,0,0.15);animation:toastIn 0.2s ease-out';
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(function() { toast.style.opacity = '0'; toast.style.transition = 'opacity 0.2s'; setTimeout(function() { container.removeChild(toast); }, 200); }, 3000);
+}
+
+async function apiRequest(path, options) {
+  try {
+    var resp = await fetch(API_BASE + path, Object.assign({
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin'
+    }, options || {}));
+    if (resp.status === 401) { location.href = 'login.html'; return null; }
+    if (resp.status === 403) { showToast('权限不足', 'danger'); return null; }
+    return await resp.json();
+  } catch (err) {
+    return { code: 0, message: '网络错误: ' + err.message, data: null };
+  }
+}
+
+function statusClass(s) { return s < 300 ? 's2xx' : s < 500 ? 's4xx' : 's5xx'; }
+
+function formatTime(timestamp) {
+  var d = new Date(timestamp);
+  return d.toLocaleTimeString('zh-CN', { hour12: false });
+}
+
+function formatJSON(data) {
+  if (!data) return '<span class="muted">— 无数据 —</span>';
+  try {
+    var obj = typeof data === 'string' ? JSON.parse(data) : data;
+    var json = JSON.stringify(obj, null, 2);
+    return json.replace(/"([^"]+)":/g, '<span class="key">"$1"</span>:')
+               .replace(/: "([^"]*)"/g, ': <span class="str">"$1"</span>')
+               .replace(/: (\d+\.?\d*)/g, ': <span class="num">$1</span>')
+               .replace(/: (true|false|null)/g, ': <span class="num">$1</span>');
+  } catch (e) {
+    return typeof data === 'string' ? data : JSON.stringify(data);
+  }
+}
+
+async function loadLogs(filters) {
+  var params = new URLSearchParams();
+  params.set('page', '1');
+  params.set('page_size', '100');
+  if (filters.status_code && filters.status_code !== 'all') params.set('status_code', filters.status_code);
+  if (filters.time_range) params.set('time_range', filters.time_range);
+  if (filters.keyword) params.set('keyword', filters.keyword);
+  if (filters.method) params.set('method', filters.method);
+
+  var result = await apiRequest('/logs?' + params.toString());
+  if (!result) return;
+  if (result.code !== 0 && result.code !== 200) {
+    showToast(result.message || '加载日志失败', 'danger');
+    return;
+  }
+  var data = result.data || result;
+  var logs = data.list || data.logs || data.items || [];
+  var total = data.total || logs.length;
+  renderLogTable(logs, total);
+}
+
+function renderLogTable(logs, total) {
+  var body = document.getElementById('logBody');
+  body.innerHTML = '';
+
+  if (!logs || logs.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:60px 20px;color:var(--muted);font-size:13px"><svg width="40" height="40" viewBox="0 0 40 40" fill="none" style="display:block;margin:0 auto 12px;opacity:0.4"><rect x="4" y="6" width="32" height="28" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M12 16h16M12 22h10M12 28h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>暂无匹配的日志记录</td></tr>';
+    document.getElementById('logCount').textContent = '显示 0 条记录 / 共 ' + (total || 0) + ' 条';
+    return;
+  }
+
+  logs.forEach(function(log) {
+    var tr = document.createElement('tr');
+    var sc = statusClass(log.status_code || log.s || 200);
+    tr.dataset.status = sc;
+    tr.dataset.id = log.id || '';
+    var method = (log.method || log.m || 'get').toLowerCase();
+    var status = log.status_code || log.s || 200;
+    var duration = log.duration || log.d || 0;
+    var ip = log.client_ip || log.ip || '-';
+    var path = log.path || log.p || '/';
+    var time = log.created_at ? formatTime(log.created_at) : (log.t || '-');
+
+    tr.innerHTML =
+      '<td class="mono muted">' + time + '</td>' +
+      '<td><span class="method ' + method + '">' + method.toUpperCase() + '</span></td>' +
+      '<td class="path-text">' + path + '</td>' +
+      '<td><span class="status-code ' + sc + '">' + status + '</span></td>' +
+      '<td class="mono muted">' + duration + 'ms</td>' +
+      '<td class="mono muted">' + ip + '</td>';
+    tr.addEventListener('click', function() { selectLog(tr, log); });
+    body.appendChild(tr);
+  });
+
+  document.getElementById('logCount').textContent = '显示 ' + logs.length + ' 条记录 / 共 ' + (total || logs.length) + ' 条';
+}
+
+function selectLog(tr, log) {
+  if (selectedRow) selectedRow.classList.remove('selected');
+  tr.classList.add('selected');
+  selectedRow = tr;
+
+  if (log.id) {
+    loadLogDetail(log.id);
+  } else {
+    populateDetail(log);
+  }
+  document.getElementById('detailPanel').classList.add('open');
+}
+
+function populateDetail(log) {
+  var method = (log.method || log.m || 'get').toLowerCase();
+  var status = log.status_code || log.s || 200;
+  var duration = log.duration || log.d || 0;
+  var ip = log.client_ip || log.ip || '-';
+  var path = log.path || log.p || '/';
+
+  document.getElementById('dMethod').textContent = method.toUpperCase();
+  document.getElementById('dStatus').textContent = status;
+  document.getElementById('dStatus').className = 'status-code ' + statusClass(status);
+  document.getElementById('dDuration').textContent = duration + 'ms';
+  document.getElementById('dIp').textContent = ip;
+  document.getElementById('dPath').textContent = path;
+  document.getElementById('dReqHeaders').innerHTML = formatJSON(log.request_headers);
+  document.getElementById('dReqBody').innerHTML = formatJSON(log.request_body);
+  document.getElementById('dRespBody').innerHTML = formatJSON(log.response_body);
+}
+
+async function loadLogDetail(id) {
+  var result = await apiRequest('/logs/' + id);
+  if (!result) return;
+  if (result.code !== 0 && result.code !== 200) {
+    showToast(result.message || '加载详情失败', 'danger');
+    return;
+  }
+  var log = result.data || result;
+  populateDetail(log);
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  if (selectedRow) { selectedRow.classList.remove('selected'); selectedRow = null; }
+}
+
+document.querySelectorAll('.filter-chip').forEach(function(chip) {
+  chip.addEventListener('click', function() {
+    document.querySelectorAll('.filter-chip').forEach(function(c) { c.classList.remove('active'); });
+    chip.classList.add('active');
+    currentFilters.status_code = chip.dataset.f;
+    loadLogs(currentFilters);
+  });
+});
+
+document.getElementById('timeRange').addEventListener('change', function() {
+  currentFilters.time_range = this.value;
+  loadLogs(currentFilters);
+});
+
+document.getElementById('logSearch').addEventListener('input', function() {
+  var val = this.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(function() {
+    currentFilters.keyword = val;
+    loadLogs(currentFilters);
+  }, 400);
+});
+
+async function clearLogs() {
+  if (!confirm('确定要清除所有请求日志吗？此操作不可恢复。')) return;
+  var result = await apiRequest('/logs', { method: 'DELETE' });
+  if (!result) return;
+  if (result.code === 0 && result.message) {
+    showToast(result.message, 'danger');
+    return;
+  }
+  showToast('日志已清除', 'success');
+  closeDetail();
+  loadLogs(currentFilters);
+}
+
+(function() {
+  var t = document.getElementById('themeToggle');
+  var s = localStorage.getItem('mock-server-theme');
+  if (s === 'light' || (!s && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+  t.addEventListener('click', function() {
+    var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('mock-server-theme', 'dark'); }
+    else { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('mock-server-theme', 'light'); }
+  });
+})();
+
+loadLogs(currentFilters);
+</script>
+</body>
+</html>

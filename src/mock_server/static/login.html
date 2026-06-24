@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Server — 登录</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #161922;
+  --surface-2: #1c1f2b;
+  --fg: #e2e4ea;
+  --muted: #6e7185;
+  --border: #272a37;
+  --accent: #4c8bf5;
+  --accent-dim: oklch(45% 0.14 250 / 0.15);
+  --success: #34d399;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --danger-dim: oklch(55% 0.16 25 / 0.12);
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', ui-monospace, Menlo, monospace;
+  --radius: 6px;
+}
+[data-theme="light"] {
+  --bg: #f4f5f7; --surface: #ffffff; --surface-2: #f0f1f4;
+  --fg: #1a1c22; --muted: #6b7084; --border: #dfe1e6;
+  --accent: #4c8bf5; --accent-dim: oklch(92% 0.04 250);
+  --success: #16a34a; --warn: #d97706; --danger: #dc2626;
+  --danger-dim: oklch(94% 0.04 25);
+}
+:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); border-radius: var(--radius); }
+.theme-toggle {
+  position: fixed; top: 16px; right: 16px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--muted); width: 36px; height: 36px;
+  border-radius: var(--radius); display: grid; place-items: center;
+  cursor: pointer; z-index: 200;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.theme-toggle:hover { background: var(--surface-2); color: var(--fg); }
+.theme-toggle svg { width: 16px; height: 16px; }
+.theme-toggle .icon-sun { display: none; }
+.theme-toggle .icon-moon { display: block; }
+[data-theme="light"] .theme-toggle .icon-sun { display: block; }
+[data-theme="light"] .theme-toggle .icon-moon { display: none; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.login-wrap {
+  width: 100%; max-width: 400px;
+  padding: 0 20px;
+}
+
+.login-brand {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.login-brand-icon {
+  width: 48px; height: 48px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  display: inline-grid; place-items: center;
+  margin-bottom: 16px;
+  background: var(--surface);
+}
+.login-brand h1 {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+.login-brand p {
+  font-size: 13px; color: var(--muted);
+}
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 28px;
+}
+
+.form-group { margin-bottom: 18px; }
+.form-label {
+  display: block;
+  font-size: 12px; font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+}
+.form-input {
+  width: 100%;
+  padding: 9px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: var(--font-body);
+  transition: border-color 0.15s;
+  outline: none;
+}
+.form-input:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--muted); opacity: 0.6; }
+
+.form-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 22px;
+}
+.form-check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+  cursor: pointer;
+}
+.form-check input[type="checkbox"] {
+  width: 14px; height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.form-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.form-link:hover { text-decoration: underline; }
+
+.btn-login {
+  width: 100%;
+  padding: 10px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 13px; font-weight: 550;
+  font-family: var(--font-body);
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-login:hover { background: oklch(60% 0.18 250); }
+.btn-login:active { transform: translateY(1px); }
+
+.login-error {
+  display: none;
+  background: var(--danger-dim);
+  border: 1px solid oklch(55% 0.16 25 / 0.25);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 18px;
+  font-size: 12px;
+  color: var(--danger);
+}
+.login-error.show { display: block; }
+
+.login-footer {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.login-footer code {
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.back-link {
+  position: fixed; top: 20px; left: 20px;
+  font-size: 12px; color: var(--muted);
+  text-decoration: none;
+  display: flex; align-items: center; gap: 4px;
+}
+.back-link:hover { color: var(--fg); }
+</style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  返回仪表盘
+</a>
+
+<button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换亮色/暗色主题">
+  <svg class="icon-moon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-7.5 5.12A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 1 5.5 5.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+  <svg class="icon-sun" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+</button>
+
+<div class="login-wrap">
+  <div class="login-brand">
+    <div class="login-brand-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="4" stroke="var(--accent)" stroke-width="1.5"/><path d="M8 12h8M12 8v8" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </div>
+    <h1>Mock Server</h1>
+    <p>登录管理控制台</p>
+  </div>
+
+  <div class="login-card">
+    <div class="login-error" id="loginError">用户名或密码错误</div>
+
+    <form id="loginForm" onsubmit="return handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label" for="username">用户名</label>
+        <input class="form-input" type="text" id="username" placeholder="输入用户名" autocomplete="username" value="admin">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="password">密码</label>
+        <input class="form-input" type="password" id="password" placeholder="输入密码" autocomplete="current-password" value="admin123">
+      </div>
+
+      <div class="form-row">
+        <label class="form-check">
+          <input type="checkbox" id="remember">
+          记住登录
+        </label>
+        <a class="form-link" href="#">忘记密码？</a>
+      </div>
+
+      <button class="btn-login" type="submit" id="loginBtn">登 录</button>
+    </form>
+  </div>
+
+  <div class="login-footer">
+    默认账号 <code>admin</code> / <code>admin123</code>
+  </div>
+</div>
+
+<script>
+var API_BASE = '/admin/api';
+
+async function apiRequest(path, options) {
+  try {
+    var resp = await fetch(API_BASE + path, Object.assign({
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin'
+    }, options));
+    var data = await resp.json();
+    if (resp.status === 401 && path !== '/auth/login') {
+      location.href = 'login.html';
+      return null;
+    }
+    return data;
+  } catch (err) {
+    return { code: 0, message: '网络错误: ' + err.message, data: null };
+  }
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  var btn = document.getElementById('loginBtn');
+  var err = document.getElementById('loginError');
+  var user = document.getElementById('username').value.trim();
+  var pass = document.getElementById('password').value;
+  var remember = document.getElementById('remember').checked;
+
+  if (!user || !pass) {
+    err.textContent = '请输入用户名和密码';
+    err.classList.add('show');
+    return false;
+  }
+
+  btn.textContent = '验证中…';
+  btn.disabled = true;
+  err.classList.remove('show');
+
+  var result = await apiRequest('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ username: user, password: pass, remember_me: remember })
+  });
+
+  if (result && result.code === 200) {
+    btn.textContent = '登录成功';
+    btn.style.background = 'var(--success)';
+    if (result.data && result.data.user) {
+      try { sessionStorage.setItem('mock_user', JSON.stringify(result.data.user)); } catch(_) {}
+    }
+    if (result.data && result.data.permissions) {
+      try { sessionStorage.setItem('mock_permissions', JSON.stringify(result.data.permissions)); } catch(_) {}
+    }
+    setTimeout(function() { location.href = 'index.html'; }, 600);
+  } else {
+    err.textContent = (result && result.message) ? result.message : '用户名或密码错误';
+    err.classList.add('show');
+    btn.textContent = '登 录';
+    btn.disabled = false;
+    btn.style.background = '';
+  }
+  return false;
+}
+
+(function() {
+  var t = document.getElementById('themeToggle');
+  var s = localStorage.getItem('mock-server-theme');
+  if (s === 'light' || (!s && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+  t.addEventListener('click', function() {
+    var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    if (isLight) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('mock-server-theme', 'dark'); }
+    else { document.documentElement.setAttribute('data-theme', 'light'); localStorage.setItem('mock-server-theme', 'light'); }
+  });
+})();
+</script>
+</body>
+</html>
