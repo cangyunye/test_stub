@@ -39,6 +39,28 @@ async def user_list_api(request: web.Request):
     return web.json_response({"code": 200, "message": "success", "data": {"total": total, "page": page, "page_size": page_size, "items": items}})
 
 
+async def user_get_api(request: web.Request):
+    """GET /admin/api/users/{id}"""
+    await require_permission(request, "users:view")
+    user_id = int(request.match_info["id"])
+    async with AsyncSessionLocal() as session:
+        stmt = select(User).where(User.id == user_id).options(selectinload(User.roles))
+        user = (await session.execute(stmt)).scalar_one_or_none()
+        if not user:
+            return web.json_response({"code": 404, "message": "用户不存在", "data": None}, status=404)
+        return web.json_response({
+            "code": 200, "message": "success",
+            "data": {
+                "id": user.id, "username": user.username,
+                "display_name": user.display_name,
+                "is_active": user.is_active, "is_superuser": user.is_superuser,
+                "roles": [{"id": r.id, "name": r.name} for r in user.roles],
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+            },
+        })
+
+
 async def user_create_api(request: web.Request):
     """POST /admin/api/users"""
     await require_permission(request, "users:create")

@@ -8,7 +8,7 @@ from mock_server.websocket import register_websocket_routes
 from mock_server.admin_routes import setup_admin_routes
 from mock_server.auth import session_middleware
 from mock_server.auth_views import login_api, logout_api, me_api, change_password_api
-from mock_server.user_api import user_list_api, user_create_api, user_update_api, user_delete_api, user_reset_password_api
+from mock_server.user_api import user_list_api, user_get_api, user_create_api, user_update_api, user_delete_api, user_reset_password_api
 from mock_server.role_api import role_list_api, role_create_api, role_update_api, role_delete_api, role_permissions_api, role_permissions_update_api
 from mock_server.menu_api import menu_tree_api, menu_create_api, menu_update_api, menu_delete_api
 from mock_server.endpoint_api import (
@@ -79,6 +79,7 @@ def create_app() -> web.Application:
 
     # User management routes
     app.router.add_get(f"{prefix}/api/users", user_list_api)
+    app.router.add_get(f"{prefix}/api/users/{{id}}", user_get_api)
     app.router.add_post(f"{prefix}/api/users", user_create_api)
     app.router.add_put(f"{prefix}/api/users/{{id}}", user_update_api)
     app.router.add_delete(f"{prefix}/api/users/{{id}}", user_delete_api)
