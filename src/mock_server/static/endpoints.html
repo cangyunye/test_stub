@@ -381,6 +381,35 @@ a:hover { text-decoration: underline; }
   </div>
 </div>
 
+<div class="modal-overlay" id="wsSnippetModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <span class="modal-title">WebSocket 请求示例</span>
+      <button class="btn-icon" onclick="closeWsSnippetModal()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">路径</label>
+        <input class="form-input" id="wsSnippetPath" type="text" readonly style="font-family:var(--font-mono);font-size:12px">
+      </div>
+      <div class="code-snippet open" style="display:block">
+        <div class="snippet-tabs">
+          <button class="snippet-tab active" data-wslang="websocat" onclick="switchWsSnippet('websocat')">websocat</button>
+          <button class="snippet-tab" data-wslang="python" onclick="switchWsSnippet('python')">Python</button>
+        </div>
+        <div class="snippet-header">
+          <span style="font-size:11px;color:var(--muted)">连接示例</span>
+          <button class="btn btn-sm" onclick="copyWsSnippet()">复制</button>
+        </div>
+        <pre id="wsSnippetContent"></pre>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeWsSnippetModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
 <script>
 var API_BASE = '/admin/api';
 
@@ -474,6 +503,7 @@ function renderWsTable() {
       '<td class="mono muted">' + (ch.auto_push_interval > 0 ? ch.auto_push_interval + 's' : '—') + '</td>' +
       '<td class="muted" style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (ch.message_template || '') + '">' + (ch.message_template ? ch.message_template.substring(0, 30) + (ch.message_template.length > 30 ? '…' : '') : '—') + '</td>' +
       '<td><div class="actions-cell">' +
+        '<button class="btn-icon" title="复制请求" onclick="showWsSnippet(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3h8v8H3z" stroke="currentColor" stroke-width="1.2"/><path d="M5 5h4v4H5z" fill="currentColor" opacity="0.3"/></svg></button>' +
         '<button class="btn-icon" title="删除" onclick="deleteWsChannel(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M2 4h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '</div></td></tr>';
   }).join('');
@@ -820,6 +850,105 @@ function fallbackCopy(text, done) {
   document.body.removeChild(ta);
 }
 
+var wsSnippetChannel = null;
+var wsSnippetLang = 'websocat';
+
+function generateWebsocatSnippet(ch) {
+  var lines = [];
+  lines.push('# 安装: brew install websocat / cargo install websocat');
+  lines.push('# 或从 https://github.com/vi/websocat/releases 下载');
+  lines.push('');
+  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + ch.path;
+  lines.push('websocat ' + url);
+  if (ch.echo_mode) {
+    lines.push('');
+    lines.push('# 连接后输入消息，服务端会原样返回');
+  }
+  if (ch.auto_push_interval > 0) {
+    lines.push('');
+    lines.push('# 服务端每 ' + ch.auto_push_interval + 's 自动推送消息');
+  }
+  return lines.join('\n');
+}
+
+function generateWsPythonSnippet(ch) {
+  var lines = [];
+  lines.push('import asyncio');
+  lines.push('import websockets');
+  lines.push('');
+  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + ch.path;
+  lines.push('async def connect():');
+  lines.push('    async with websockets.connect("' + url + '") as ws:');
+  lines.push('        print("connected")');
+  if (ch.echo_mode) {
+    lines.push('        await ws.send("hello")');
+    lines.push('        msg = await ws.recv()');
+    lines.push('        print("received:", msg)');
+  }
+  if (ch.auto_push_interval > 0) {
+    lines.push('        # 服务端会每 ' + ch.auto_push_interval + 's 自动推送');
+    lines.push('        # 你可以循环接收:');
+    lines.push('        # async for msg in ws:');
+    lines.push('        #     print("push:", msg)');
+  }
+  if (!ch.echo_mode && !ch.auto_push_interval) {
+    lines.push('        await ws.send("hello")');
+    lines.push('        msg = await ws.recv()');
+    lines.push('        print("received:", msg)');
+  }
+  lines.push('');
+  lines.push('asyncio.run(connect())');
+  return lines.join('\n');
+}
+
+function updateWsSnippetDisplay() {
+  if (!wsSnippetChannel) return;
+  var code = wsSnippetLang === 'websocat' ? generateWebsocatSnippet(wsSnippetChannel) : generateWsPythonSnippet(wsSnippetChannel);
+  document.getElementById('wsSnippetContent').textContent = code;
+}
+
+function switchWsSnippet(lang) {
+  wsSnippetLang = lang;
+  document.querySelectorAll('#wsSnippetModal .snippet-tab').forEach(function(t) { t.classList.toggle('active', t.dataset.wslang === lang); });
+  updateWsSnippetDisplay();
+}
+
+function copyWsSnippet() {
+  var text = document.getElementById('wsSnippetContent').textContent;
+  if (!text) return;
+  var done = function() {
+    var btn = document.querySelector('#wsSnippetModal .snippet-header .btn');
+    if (!btn) return;
+    var old = btn.textContent;
+    btn.textContent = '已复制';
+    setTimeout(function() { btn.textContent = old; }, 1500);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(function() { fallbackCopy(text, done); });
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+async function showWsSnippet(id) {
+  var result = await apiRequest('/websocket-channels/' + id);
+  if (!result || result.code !== 200 || !result.data) return;
+  var ch = result.data;
+  wsSnippetChannel = ch;
+  wsSnippetLang = 'websocat';
+  document.getElementById('wsSnippetPath').value = ch.path;
+  document.querySelector('#wsSnippetModal .snippet-tab[data-wslang="websocat"]').classList.add('active');
+  document.querySelector('#wsSnippetModal .snippet-tab[data-wslang="python"]').classList.remove('active');
+  updateWsSnippetDisplay();
+  document.getElementById('wsSnippetModal').classList.add('open');
+}
+
+function closeWsSnippetModal() {
+  document.getElementById('wsSnippetModal').classList.remove('open');
+}
+
+document.getElementById('wsSnippetModal').addEventListener('click', function(e) { if (e.target === this) closeWsSnippetModal(); });
+
 async function toggleWsChannel(id) {
   var result = await apiRequest('/websocket-channels/' + id + '/toggle', { method: 'PATCH' });
   if (result && result.code === 200) {
@@ -856,7 +985,7 @@ function closeModal() {
   document.getElementById('codeSnippet').classList.remove('open');
 }
 document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { closeModal(); closeWsSnippetModal(); } });
 
 document.getElementById('searchInput').addEventListener('input', function() { httpPage = 1; loadEndpoints(); });
 document.getElementById('wsSearchInput').addEventListener('input', function() { wsPage = 1; loadWsChannels(); });
