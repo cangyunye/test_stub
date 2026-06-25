@@ -218,7 +218,7 @@ a:hover { text-decoration: underline; }
         <svg class="icon-moon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 0 1-7.5 5.12A5.5 5.5 0 1 0 8 2.5a5.5 5.5 0 0 1 5.5 5.5Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
         <svg class="icon-sun" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
       </button>
-      <button class="btn btn-primary" onclick="openModal()">
+      <button class="btn btn-primary" id="headerCreateEndpoint" onclick="openModal()">
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         新建端点
       </button>
@@ -506,10 +506,18 @@ async function loadUserInfo() {
   if (roleEl) roleEl.textContent = u.is_superuser ? '超级管理员' : '普通用户';
   var perms = [];
   try { perms = JSON.parse(sessionStorage.getItem('mock_permissions')) || []; } catch(e) {}
+  canCreate = u.is_superuser || perms.indexOf('endpoints:create') !== -1;
+  canEdit = u.is_superuser || perms.indexOf('endpoints:edit') !== -1;
+  canDelete = u.is_superuser || perms.indexOf('endpoints:delete') !== -1;
   var sysSection = document.getElementById('navSectionSystem');
   if (sysSection) {
     sysSection.style.display = (u.is_superuser || perms.indexOf('users:view') !== -1) ? '' : 'none';
   }
+  // 权限控制按钮显隐
+  var hdrBtn = document.getElementById('headerCreateEndpoint');
+  if (hdrBtn) hdrBtn.style.display = canCreate ? '' : 'none';
+  var wsBtn = document.querySelector('#wsPanel .btn-primary');
+  if (wsBtn) wsBtn.style.display = canCreate ? '' : 'none';
 }
 
 async function checkAuth() {
@@ -531,6 +539,7 @@ var httpTotalPages = 1, wsTotalPages = 1;
 var httpTotal = 0, wsTotal = 0;
 var snippetLang = 'curl';
 var snippetEndpoint = null;
+var canCreate = false, canEdit = false, canDelete = false;
 
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
@@ -570,8 +579,8 @@ function renderHttpTable() {
       '<td class="muted" style="font-size:12px">' + (ep.owner_name || '公共') + '</td>' +
       '<td><div class="actions-cell">' +
         '<button class="btn-icon" title="复制请求" onclick="showSnippetFor(' + ep.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3h8v8H3z" stroke="currentColor" stroke-width="1.2"/><path d="M5 5h4v4H5z" fill="currentColor" opacity="0.3"/></svg></button>' +
-        '<button class="btn-icon" title="编辑" onclick="editEndpoint(' + ep.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-7 7H3v-2l7-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon" title="删除" onclick="deleteEndpoint(' + ep.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M2 4h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+        (canEdit ? '<button class="btn-icon" title="编辑" onclick="editEndpoint(' + ep.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-7 7H3v-2l7-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>' : '') +
+        (canDelete ? '<button class="btn-icon" title="删除" onclick="deleteEndpoint(' + ep.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M2 4h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') +
       '</div></td></tr>';
   }).join('');
 }
@@ -595,8 +604,8 @@ function renderWsTable() {
       '<td class="muted" style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + (ch.message_template || '') + '">' + (ch.message_template ? ch.message_template.substring(0, 30) + (ch.message_template.length > 30 ? '…' : '') : '—') + '</td>' +
       '<td><div class="actions-cell">' +
         '<button class="btn-icon" title="复制请求" onclick="showWsSnippet(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3h8v8H3z" stroke="currentColor" stroke-width="1.2"/><path d="M5 5h4v4H5z" fill="currentColor" opacity="0.3"/></svg></button>' +
-        '<button class="btn-icon" title="编辑" onclick="editWsChannel(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-7 7H3v-2l7-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>' +
-        '<button class="btn-icon" title="删除" onclick="deleteWsChannel(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M2 4h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
+        (canEdit ? '<button class="btn-icon" title="编辑" onclick="editWsChannel(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10 2l2 2-7 7H3v-2l7-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>' : '') +
+        (canDelete ? '<button class="btn-icon" title="删除" onclick="deleteWsChannel(' + ch.id + ')"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 4h8l-.5 8H3.5L3 4zM5.5 4V3a1 1 0 011-1h1a1 1 0 011 1v1M2 4h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' : '') +
       '</div></td></tr>';
   }).join('');
 }
