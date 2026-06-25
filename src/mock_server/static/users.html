@@ -59,6 +59,8 @@ a { color: var(--accent); text-decoration: none; }
 .nav-item svg { flex-shrink: 0; opacity: 0.7; }
 .nav-item.active svg { opacity: 1; }
 .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+.sidebar-logout { padding: 5px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--radius); transition: background 0.12s, color 0.12s; margin-left: auto; flex-shrink: 0; display: grid; place-items: center; }
+.sidebar-logout:hover { background: var(--danger-dim); color: var(--danger); }
 .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-dim); color: var(--accent); display: grid; place-items: center; font-size: 11px; font-weight: 600; }
 
 .main { margin-left: var(--sidebar-w); min-height: 100vh; }
@@ -176,18 +178,18 @@ a { color: var(--accent); text-decoration: none; }
         请求日志
       </a>
     </div>
-    <div class="nav-section">
+    <div class="nav-section" id="navSectionSystem">
       <div class="nav-section-label">系统</div>
-      <a class="nav-item active" href="/admin/users.html">
+      <a class="nav-item active" id="navUsers" href="/admin/users.html">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         用户与权限
       </a>
     </div>
   </nav>
   <div class="sidebar-footer">
-    <div class="avatar">A</div>
-    <div><div style="color:var(--fg);font-weight:500;font-size:12px">admin</div><div style="font-size:11px">超级管理员</div></div>
-    <button class="btn-icon" title="退出登录" onclick="logout()" style="margin-left:auto;flex-shrink:0" aria-label="退出登录">
+    <div class="avatar"></div>
+    <div><div id="sidebarUserName" style="color:var(--fg);font-weight:500;font-size:12px"></div><div id="sidebarUserRole" style="font-size:11px"></div></div>
+    <button class="sidebar-logout" title="退出登录" onclick="logout()" aria-label="退出登录">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2H3a1 1 0 00-1 1v8a1 1 0 001 1h2M9 10l3-3-3-3M12 7H5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </div>
@@ -609,6 +611,24 @@ async function logout() {
   await fetch('/admin/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
   try { sessionStorage.clear(); } catch(e) {}
   location.href = '/admin/login';
+}
+
+async function loadUserInfo() {
+  var result = await apiRequest('/auth/me');
+  if (!result || result.code !== 200 || !result.data) return;
+  var u = result.data;
+  var avatarEl = document.querySelector('.sidebar-footer .avatar');
+  if (avatarEl) avatarEl.textContent = (u.display_name || u.username || 'A').charAt(0).toUpperCase();
+  var nameEl = document.getElementById('sidebarUserName');
+  if (nameEl) nameEl.textContent = u.display_name || u.username;
+  var roleEl = document.getElementById('sidebarUserRole');
+  if (roleEl) roleEl.textContent = u.is_superuser ? '超级管理员' : '普通用户';
+  var perms = [];
+  try { perms = JSON.parse(sessionStorage.getItem('mock_permissions')) || []; } catch(e) {}
+  var sysSection = document.getElementById('navSectionSystem');
+  if (sysSection) {
+    sysSection.style.display = (u.is_superuser || perms.indexOf('users:view') !== -1) ? '' : 'none';
+  }
 }
 
 async function apiRequest(path, options) {
@@ -1092,7 +1112,7 @@ document.querySelector('#panel-users .search-box input').addEventListener('input
 document.querySelector('.header-actions .btn-primary').setAttribute('onclick', 'resetUserModal();openModal("userModal")');
 document.querySelector('#panel-roles .btn-primary').setAttribute('onclick', 'resetRoleModal();openModal("roleModal")');
 
-loadUsers();
+loadUserInfo(); loadUsers();
 loadRolesForSelect();
 </script>
 </body>

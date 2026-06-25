@@ -131,6 +131,8 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 10px;
   font-size: 12px; color: var(--muted);
 }
+.sidebar-logout { padding: 5px; border: none; background: none; color: var(--muted); cursor: pointer; border-radius: var(--radius); transition: background 0.12s, color 0.12s; margin-left: auto; flex-shrink: 0; display: grid; place-items: center; }
+.sidebar-logout:hover { background: var(--danger-dim); color: var(--danger); }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%;
   background: var(--accent-dim); color: var(--accent);
@@ -547,21 +549,21 @@ a:hover { text-decoration: underline; }
         请求日志
       </a>
     </div>
-    <div class="nav-section">
+    <div class="nav-section" id="navSectionSystem">
       <div class="nav-section-label">系统</div>
-      <a class="nav-item" href="/admin/users.html">
+      <a class="nav-item" id="navUsers" href="/admin/users.html">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         用户与权限
       </a>
     </div>
   </nav>
   <div class="sidebar-footer">
-    <div class="avatar" aria-hidden="true">A</div>
+    <div class="avatar" aria-hidden="true"></div>
     <div>
-      <div style="color:var(--fg);font-weight:500;font-size:12px">admin</div>
-      <div style="font-size:11px">超级管理员</div>
+      <div id="sidebarUserName" style="color:var(--fg);font-weight:500;font-size:12px"></div>
+      <div id="sidebarUserRole" style="font-size:11px"></div>
     </div>
-    <button class="btn-icon" title="退出登录" onclick="logout()" style="margin-left:auto;flex-shrink:0" aria-label="退出登录">
+    <button class="sidebar-logout" title="退出登录" onclick="logout()" aria-label="退出登录">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2H3a1 1 0 00-1 1v8a1 1 0 001 1h2M9 10l3-3-3-3M12 7H5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
   </div>
@@ -857,14 +859,20 @@ async function loadUserInfo() {
   var result = await apiRequest('/auth/me');
   if (!result || result.code !== 200 || !result.data) return;
   var u = result.data;
-  var footer = document.querySelector('.sidebar-footer');
-  if (footer && u.username) {
-    var avatarEl = footer.querySelector('.avatar');
-    if (avatarEl) avatarEl.textContent = (u.display_name || u.username || 'A').charAt(0).toUpperCase();
-    var nameEl = footer.querySelector('div > div:first-child');
-    if (nameEl) nameEl.textContent = u.display_name || u.username;
-    var roleEl = footer.querySelector('div > div:last-child');
-    if (roleEl) roleEl.textContent = u.is_superuser ? '超级管理员' : '普通用户';
+  var avatarEl = document.querySelector('.sidebar-footer .avatar');
+  if (avatarEl) avatarEl.textContent = (u.display_name || u.username || 'A').charAt(0).toUpperCase();
+  var nameEl = document.getElementById('sidebarUserName');
+  if (nameEl) nameEl.textContent = u.display_name || u.username;
+  var roleEl = document.getElementById('sidebarUserRole');
+  if (roleEl) roleEl.textContent = u.is_superuser ? '超级管理员' : '普通用户';
+
+  // 根据权限隐藏系统管理链接
+  var perms = [];
+  try { perms = JSON.parse(sessionStorage.getItem('mock_permissions')) || []; } catch(e) {}
+  var sysSection = document.getElementById('navSectionSystem');
+  if (sysSection) {
+    var showSys = u.is_superuser || perms.indexOf('users:view') !== -1;
+    sysSection.style.display = showSys ? '' : 'none';
   }
 }
 
