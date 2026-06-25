@@ -81,6 +81,18 @@ async def seed_data():
         await session.flush()
         session.add(UserRole(user_id=testuser.id, role_id=tester.id))
 
+        # 创建 visitor 只读用户
+        visitor = User(
+            username="visitor",
+            password_hash=bcrypt.hashpw("visitor123".encode(), bcrypt.gensalt()).decode(),
+            display_name="访客用户",
+            is_active=True,
+            is_superuser=False,
+        )
+        session.add(visitor)
+        await session.flush()
+        session.add(UserRole(user_id=visitor.id, role_id=readonly.id))
+
         # 创建示例公共端点
         endpoints = [
             Endpoint(method="GET", path="/api/hello", status_code=200,
