@@ -30,8 +30,11 @@ class ResponseEngine:
                 break
 
         # Jinja2 模板渲染
-        template = Template(body)
-        rendered_body = template.render(**request_data)
+        try:
+            template = Template(body)
+            rendered_body = template.render(**request_data)
+        except Exception:
+            rendered_body = body
 
         return status, rendered_body, headers
 
