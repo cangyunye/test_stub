@@ -845,6 +845,15 @@ async function loadDashboard() {
   if (d.recent_requests) renderRecentRequests(d.recent_requests);
 }
 
+async function checkAuth() {
+  var result = await apiRequest('/auth/me');
+  if (!result || result.code !== 200 || !result.data) {
+    location.href = 'login.html';
+    return false;
+  }
+  return true;
+}
+
 async function loadUserInfo() {
   var result = await apiRequest('/auth/me');
   if (!result || result.code !== 200 || !result.data) return;
@@ -860,8 +869,7 @@ async function loadUserInfo() {
   }
 }
 
-loadDashboard();
-loadUserInfo();
+checkAuth().then(function(ok) { if (ok) { loadDashboard(); loadUserInfo(); } });
 
 (function() {
   var sidebar = document.getElementById('sidebar');

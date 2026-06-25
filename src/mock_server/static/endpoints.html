@@ -481,6 +481,15 @@ async function apiRequest(path, options) {
   }
 }
 
+async function checkAuth() {
+  var result = await apiRequest('/auth/me');
+  if (!result || result.code !== 200 || !result.data) {
+    location.href = 'login.html';
+    return false;
+  }
+  return true;
+}
+
 var httpEndpoints = [];
 var wsChannels = [];
 var activeMethod = 'all';
@@ -1138,9 +1147,7 @@ document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { clo
 document.getElementById('searchInput').addEventListener('input', function() { httpPage = 1; loadEndpoints(); });
 document.getElementById('wsSearchInput').addEventListener('input', function() { wsPage = 1; loadWsChannels(); });
 
-loadEndpoints();
-loadWsChannels();
-loadUsers();
+checkAuth().then(function(ok) { if (ok) { loadEndpoints(); loadWsChannels(); loadUsers(); } });
 
 (function() {
   var t = document.getElementById('themeToggle');
