@@ -10,6 +10,11 @@ logger = logging.getLogger("mock_server.routes")
 
 
 async def dynamic_handler(request: web.Request) -> web.Response:
+    # WebSocket 升级请求：委托给 websocket_handler 动态处理
+    if request.headers.get("Upgrade", "").lower() == "websocket":
+        from mock_server.websocket import websocket_handler
+        return await websocket_handler(request)
+
     start = time.monotonic()
     method = request.method
     path = request.path
