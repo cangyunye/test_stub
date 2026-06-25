@@ -259,11 +259,19 @@ async function apiRequest(path, options) {
 }
 
 async function checkAuth() {
-  var result = await apiRequest('/auth/me');
-  if (result && result.code === 200 && result.data) {
-    location.href = '/admin/';
-    return true;
-  }
+  try {
+    var resp = await fetch(API_BASE + '/auth/me', {
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin'
+    });
+    if (resp.status === 200) {
+      var data = await resp.json();
+      if (data && data.code === 200 && data.data) {
+        location.href = '/admin/';
+        return true;
+      }
+    }
+  } catch(e) {}
   return false;
 }
 
