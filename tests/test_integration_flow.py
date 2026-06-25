@@ -460,3 +460,36 @@ class TestPermissionAccess:
         assert resp.status == 200
         body = await resp.json()
         assert body["code"] == 200
+
+    @pytest.mark.asyncio
+    async def test_22_get_user_by_id(self, client):
+        """GET /admin/api/users/{id} 返回用户详情"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        # admin is user id=1
+        resp = await client.get("/admin/api/users/1")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["code"] == 200
+        assert body["data"]["username"] == "admin"
+        assert body["data"]["is_superuser"] == True
+        assert "roles" in body["data"]
+
+    @pytest.mark.asyncio
+    async def test_23_get_user_not_found(self, client):
+        """GET /admin/api/users/{id} 不存在时返回 404"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/users/9999")
+        assert resp.status == 404
+        body = await resp.json()
+        assert body["code"] == 404
+
+    @pytest.mark.asyncio
+    async def test_24_visitor_cannot_view_user(self, client):
+        """只读用户无 users:view 权限，获取用户详情返回 403"""
+        sid = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/users/1")
+        assert resp.status == 403, f"expected 403, got {resp.status}"
