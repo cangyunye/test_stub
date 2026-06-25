@@ -34,6 +34,19 @@ async def _login(client) -> str:
     raise AssertionError("No session cookie in response")
 
 
+async def _login_as(client, username: str, password: str) -> str:
+    """Login as any user, return session cookie value."""
+    resp = await client.post("/admin/api/auth/login", json={
+        "username": username, "password": password,
+    })
+    assert resp.status == 200, f"login as {username} failed"
+    cookies = resp.headers.getall("Set-Cookie", [])
+    for c in cookies:
+        if c.startswith("mock_session_id="):
+            return c.split(";")[0].split("=", 1)[1]
+    raise AssertionError("No session cookie in response")
+
+
 async def _set_cookie(client, session_id: str):
     client.session.cookie_jar.clear()
     client.session.cookie_jar.update_cookies({"mock_session_id": session_id})
@@ -340,3 +353,110 @@ class TestRouteAuth:
         assert resp.status == 200
         data = await resp.json()
         assert "message" in data
+
+
+class TestPermissionAccess:
+
+    @pytest.mark.asyncio
+    async def test_16_ws_channel_create_and_connect(self, client):
+        """创建 WebSocket 通道后可通过 WS 连接（动态路由）"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        # Create WS channel via API
+        resp = await client.post("/admin/api/websocket-channels", json={
+            "path": "/ws/integration-test",
+            "echo_mode": True,
+            "auto_push_interval": 0,
+            "is_active": True,
+        })
+        body = await resp.json()
+        assert body["code"] == 201, body
+
+        # Connect via WebSocket (tests dynamic routing in catch-all handler)
+        ws = await client.ws_connect("/ws/integration-test")
+        await ws.send_str("ping")
+        msg = await ws.receive()
+        assert msg.type == web.WSMsgType.TEXT
+        assert msg.data == "ping"
+        await ws.close()
+
+    @pytest.mark.asyncio
+    async def test_17_visitor_cannot_create_endpoint(self, client):
+        """只读用户（visitor）无法创建端点"""
+        sid = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid)
+
+        resp = await client.post("/admin/api/endpoints", json={
+            "method": "GET", "path": "/api/visitor-test",
+            "status_code": 200, "response_body": "{}",
+            "is_active": True,
+        })
+        assert resp.status == 403, f"expected 403, got {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_18_visitor_cannot_edit_endpoint(self, client):
+        """只读用户无法编辑端点"""
+        # Admin creates endpoint first
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.post("/admin/api/endpoints", json={
+            "method": "GET", "path": "/api/visitor-edit-test",
+            "status_code": 200, "response_body": "original",
+            "is_active": True,
+        })
+        ep_id = (await resp.json())["data"]["id"]
+
+        # Visitor tries to edit
+        sid2 = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid2)
+        resp = await client.put(f"/admin/api/endpoints/{ep_id}", json={
+            "response_body": "hacked",
+        })
+        assert resp.status == 403, f"expected 403, got {resp.status}"
+
+        # Verify original content preserved
+        sid3 = await _login(client)
+        await _set_cookie(client, sid3)
+        resp = await client.get(f"/admin/api/endpoints/{ep_id}")
+        body = await resp.json()
+        assert body["data"]["response_body"] == "original"
+
+    @pytest.mark.asyncio
+    async def test_19_visitor_cannot_delete_endpoint(self, client):
+        """只读用户无法删除端点"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.post("/admin/api/endpoints", json={
+            "method": "GET", "path": "/api/visitor-delete-test",
+            "status_code": 200, "response_body": "{}",
+            "is_active": True,
+        })
+        ep_id = (await resp.json())["data"]["id"]
+
+        sid2 = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid2)
+        resp = await client.delete(f"/admin/api/endpoints/{ep_id}")
+        assert resp.status == 403, f"expected 403, got {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_20_visitor_cannot_create_ws_channel(self, client):
+        """只读用户无法创建 WebSocket 通道"""
+        sid = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid)
+        resp = await client.post("/admin/api/websocket-channels", json={
+            "path": "/ws/visitor-test",
+            "echo_mode": True,
+            "is_active": True,
+        })
+        assert resp.status == 403, f"expected 403, got {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_21_visitor_can_view_endpoints(self, client):
+        """只读用户可以查看端点列表"""
+        sid = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/endpoints?page=1&page_size=10")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["code"] == 200
