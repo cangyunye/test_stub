@@ -7,10 +7,16 @@ def setup_admin_routes(app: web.Application):
     """注册管理后台静态页面路由（前端原型）"""
     prefix = settings.admin_path
 
-    # 根路径重定向到仪表盘
-    app.router.add_get(f"{prefix}/", index_redirect)
+    # 根路径 → 仪表盘
+    app.router.add_get("/", index_redirect)
+    app.router.add_get("/index.html", make_page_handler("index"))
 
-    # 静态页面（login 免认证，其余需认证）
+    # 非系统页面位于根路径（需认证，由 middleware 保护）
+    app.router.add_get("/endpoints.html", make_page_handler("endpoints"))
+    app.router.add_get("/logs.html", make_page_handler("logs"))
+
+    # 系统页面位于 /admin 下
+    app.router.add_get(f"{prefix}/", index_redirect)
     app.router.add_get(f"{prefix}/login", make_page_handler("login"))
     app.router.add_get(f"{prefix}/login.html", make_page_handler("login"))
     app.router.add_get(f"{prefix}/index.html", make_page_handler("index"))

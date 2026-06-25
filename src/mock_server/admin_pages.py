@@ -33,4 +33,4 @@ def make_page_handler(name: str):
 
 async def index_redirect(request: web.Request):
     """根路径重定向到仪表盘"""
-    raise web.HTTPFound("/admin/index.html")
+    raise web.HTTPFound("/index.html")

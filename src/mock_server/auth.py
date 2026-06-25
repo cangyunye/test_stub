@@ -11,6 +11,9 @@ SESSION_TTL = 3600  # 1小时
 USER_KEY = web.RequestKey("user", dict)
 PERMISSIONS_KEY = web.RequestKey("permissions", list)
 
+# 需要认证的根路径页面（非系统页面位于根路径，系统页面在 /admin 下）
+ROOT_PROTECTED = {"/", "/index.html", "/endpoints.html", "/logs.html", "/chat.html"}
+
 
 @web.middleware
 async def session_middleware(request: web.Request, handler):
@@ -18,8 +21,8 @@ async def session_middleware(request: web.Request, handler):
     if request.path in ("/admin/login", "/admin/login.html", "/admin/api/auth/login"):
         return await handler(request)
 
-    # Mock 端点请求免认证（/api/* 和任意非 /admin 路径）
-    if not request.path.startswith("/admin"):
+    # Mock 端点请求免认证（/api/* 和任意非系统路径）
+    if not request.path.startswith("/admin") and request.path not in ROOT_PROTECTED:
         return await handler(request)
 
     # 静态资源免认证
@@ -27,9 +30,10 @@ async def session_middleware(request: web.Request, handler):
         return await handler(request)
 
     # API 请求检查 session
+    is_api = request.path.startswith("/admin/api/")
     session_id = request.cookies.get("mock_session_id")
     if not session_id or session_id not in SESSION_STORE:
-        if request.path.startswith("/admin/api/"):
+        if is_api:
             return web.json_response(
                 {"code": 401, "message": "未登录或会话已过期", "data": None},
                 status=401
@@ -40,7 +44,7 @@ async def session_middleware(request: web.Request, handler):
     session = SESSION_STORE[session_id]
     if time.time() - session["created_at"] > SESSION_TTL:
         del SESSION_STORE[session_id]
-        if request.path.startswith("/admin/api/"):
+        if is_api:
             return web.json_response(
                 {"code": 401, "message": "会话已过期", "data": None},
                 status=401

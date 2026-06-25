@@ -549,13 +549,9 @@ a:hover { text-decoration: underline; }
     </div>
     <div class="nav-section">
       <div class="nav-section-label">系统</div>
-      <a class="nav-item" href="users.html">
+      <a class="nav-item" href="/admin/users.html">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="5" r="3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
         用户与权限
-      </a>
-      <a class="nav-item" href="login.html">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3" y="2" width="10" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/><path d="M6 8h4M8 6v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        登录页
       </a>
     </div>
   </nav>
@@ -735,7 +731,7 @@ async function apiRequest(path, options) {
     }, options));
     var data = await resp.json();
     if (resp.status === 401 && path !== '/auth/login') {
-      location.href = 'login.html';
+      location.href = '/admin/login';
       return null;
     }
     return data;
@@ -851,7 +847,7 @@ async function loadDashboard() {
 async function checkAuth() {
   var result = await apiRequest('/auth/me');
   if (!result || result.code !== 200 || !result.data) {
-    location.href = 'login.html';
+    location.href = '/admin/login';
     return false;
   }
   return true;
