@@ -258,23 +258,6 @@ async function apiRequest(path, options) {
   }
 }
 
-async function checkAuth() {
-  try {
-    var resp = await fetch(API_BASE + '/auth/me', {
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin'
-    });
-    if (resp.status === 200) {
-      var data = await resp.json();
-      if (data && data.code === 200 && data.data) {
-        location.href = '/';
-        return true;
-      }
-    }
-  } catch(e) {}
-  return false;
-}
-
 async function handleLogin(e) {
   e.preventDefault();
   var btn = document.getElementById('loginBtn');
@@ -317,8 +300,6 @@ async function handleLogin(e) {
   }
   return false;
 }
-
-checkAuth();
 
 (function() {
   var t = document.getElementById('themeToggle');
