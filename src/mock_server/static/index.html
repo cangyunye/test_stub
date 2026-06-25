@@ -565,6 +565,9 @@ a:hover { text-decoration: underline; }
       <div style="color:var(--fg);font-weight:500;font-size:12px">admin</div>
       <div style="font-size:11px">超级管理员</div>
     </div>
+    <button class="btn-icon" title="退出登录" onclick="logout()" style="margin-left:auto;flex-shrink:0" aria-label="退出登录">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5 2H3a1 1 0 00-1 1v8a1 1 0 001 1h2M9 10l3-3-3-3M12 7H5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
   </div>
 </aside>
 
@@ -867,6 +870,12 @@ async function loadUserInfo() {
     var roleEl = footer.querySelector('div > div:last-child');
     if (roleEl) roleEl.textContent = u.is_superuser ? '超级管理员' : '普通用户';
   }
+}
+
+async function logout() {
+  await fetch('/admin/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+  try { sessionStorage.clear(); } catch(e) {}
+  location.href = '/admin/login';
 }
 
 checkAuth().then(function(ok) { if (ok) { loadDashboard(); loadUserInfo(); } });
