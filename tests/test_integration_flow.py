@@ -1,4 +1,4 @@
-"""端到端集成测试：用户创建 → 端点创建 → 公共/归属端点调用"""
+"""端到端集成测试：用户创建 → 端点创建 → 公共/归属端点调用 + 路由认证 + 登出流程"""
 import pytest
 from aiohttp import web
 from sqlalchemy import select, func
@@ -248,3 +248,95 @@ class TestIntegrationFlow:
 
         r = await client.get("/api/a-only", headers={"stub-x-token": "admin"})
         assert r.status == 200
+
+
+class TestRouteAuth:
+
+    @pytest.mark.asyncio
+    async def test_09_root_pages_redirect_unauthenticated(self, client):
+        """未登录用户访问根路径页面应重定向到 /admin/login"""
+        for path in ("/", "/index.html", "/endpoints.html", "/logs.html"):
+            resp = await client.get(path, allow_redirects=False)
+            assert resp.status in (302, 303), f"{path} should redirect, got {resp.status}"
+            location = resp.headers.get("Location", "")
+            assert location == "/admin/login", f"{path} redirects to {location}, expected /admin/login"
+
+    @pytest.mark.asyncio
+    async def test_10_root_pages_accessible_after_login(self, client):
+        """登录后根路径页面应正常返回 200"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        resp = await client.get("/", allow_redirects=False)
+        assert resp.status in (302, 303), f"got {resp.status}"
+        assert resp.headers.get("Location") in ("/index.html", "/admin/")
+
+        resp = await client.get("/index.html")
+        assert resp.status == 200
+
+        resp = await client.get("/endpoints.html")
+        assert resp.status == 200
+
+        resp = await client.get("/logs.html")
+        assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_11_admin_pages_redirect_unauthenticated(self, client):
+        """未登录用户访问 /admin 页面应重定向到 /admin/login"""
+        for path in ("/admin/", "/admin/index.html", "/admin/endpoints.html",
+                     "/admin/logs.html", "/admin/users.html"):
+            resp = await client.get(path, allow_redirects=False)
+            assert resp.status in (302, 303), f"{path} should redirect, got {resp.status}"
+            location = resp.headers.get("Location", "")
+            assert location == "/admin/login", f"{path} redirects to {location}"
+
+    @pytest.mark.asyncio
+    async def test_12_admin_pages_accessible_after_login(self, client):
+        """登录后 /admin 页面应正常返回 200"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        for path in ("/admin/", "/admin/index.html", "/admin/endpoints.html",
+                     "/admin/logs.html", "/admin/users.html"):
+            resp = await client.get(path, allow_redirects=False)
+            if resp.status in (302, 303):
+                resp = await client.get(resp.headers.get("Location", ""))
+            assert resp.status == 200, f"{path} returned {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_13_login_page_whitelisted(self, client):
+        """登录页面无需认证即可访问"""
+        resp = await client.get("/admin/login")
+        assert resp.status == 200
+
+        resp = await client.get("/admin/login.html")
+        assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_14_logout_clears_session(self, client):
+        """登出后清除 session，再次访问受保护页面需重新登录"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        # Verify authenticated first
+        resp = await client.get("/index.html")
+        assert resp.status == 200
+
+        # Logout
+        resp = await client.post("/admin/api/auth/logout")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["code"] == 200
+
+        # Session cookie cleared — access should redirect
+        resp = await client.get("/index.html", allow_redirects=False)
+        assert resp.status in (302, 303)
+        assert resp.headers.get("Location") == "/admin/login"
+
+    @pytest.mark.asyncio
+    async def test_15_mock_endpoints_unauthenticated(self, client):
+        """Mock 端点 /api/* 无需认证即可访问"""
+        resp = await client.get("/api/hello")
+        assert resp.status == 200
+        data = await resp.json()
+        assert "message" in data
