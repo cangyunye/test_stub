@@ -90,7 +90,15 @@ async def user_update_api(request: web.Request):
         if not user:
             return web.json_response({"code": 404, "message": "用户不存在", "data": None}, status=404)
         user.display_name = data.get("display_name", user.display_name)
-        user.is_active = data.get("is_active", user.is_active)
+        if "is_active" in data:
+            # 禁止停用最后一个超级管理员
+            if user.is_superuser and not data["is_active"]:
+                count = await session.scalar(select(func.count()).select_from(User).where(User.is_superuser == True))
+                if count <= 1:
+                    return web.json_response({"code": 400, "message": "无法停用最后一个超级管理员", "data": None}, status=400)
+            user.is_active = data["is_active"]
+        if "password" in data and data["password"]:
+            user.password_hash = bcrypt.hashpw(data["password"].encode(), bcrypt.gensalt()).decode()
         # 更新角色
         if "role_ids" in data:
             await session.execute(UserRole.__table__.delete().where(UserRole.user_id == user_id))
@@ -106,9 +114,15 @@ async def user_delete_api(request: web.Request):
     user_id = int(request.match_info["id"])
     async with AsyncSessionLocal() as session:
         user = await session.get(User, user_id)
-        if user:
-            await session.delete(user)
-            await session.commit()
+        if not user:
+            return web.json_response({"code": 404, "message": "用户不存在", "data": None}, status=404)
+        # 禁止删除最后一个超级管理员
+        if user.is_superuser:
+            count = await session.scalar(select(func.count()).select_from(User).where(User.is_superuser == True))
+            if count <= 1:
+                return web.json_response({"code": 400, "message": "无法删除最后一个超级管理员", "data": None}, status=400)
+        await session.delete(user)
+        await session.commit()
         return web.json_response({"code": 200, "message": "用户删除成功", "data": None})
 
 
