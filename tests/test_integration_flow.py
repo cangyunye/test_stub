@@ -493,3 +493,59 @@ class TestPermissionAccess:
         await _set_cookie(client, sid)
         resp = await client.get("/admin/api/users/1")
         assert resp.status == 403, f"expected 403, got {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_25_admin_update_password(self, client):
+        """管理员修改用户密码后新密码生效"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        # Create a test user
+        resp = await client.post("/admin/api/users", json={
+            "username": "pwtest", "password": "old123",
+            "display_name": "PW Test", "is_active": True,
+        })
+        body = await resp.json()
+        uid = body["data"]["id"]
+
+        # Update password
+        resp = await client.put(f"/admin/api/users/{uid}", json={
+            "password": "new456",
+        })
+        assert resp.status == 200
+
+        # Verify login with new password works
+        resp = await client.post("/admin/api/auth/login", json={
+            "username": "pwtest", "password": "new456",
+        })
+        assert resp.status == 200, "new password should work"
+
+        # Old password should fail
+        resp = await client.post("/admin/api/auth/login", json={
+            "username": "pwtest", "password": "old123",
+        })
+        assert resp.status == 401, "old password should fail"
+
+    @pytest.mark.asyncio
+    async def test_26_cannot_delete_last_superuser(self, client):
+        """无法删除最后一个超级管理员"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        resp = await client.delete("/admin/api/users/1")
+        assert resp.status == 400, f"expected 400, got {resp.status}"
+        body = await resp.json()
+        assert "无法删除" in body.get("message", "")
+
+    @pytest.mark.asyncio
+    async def test_27_cannot_deactivate_last_superuser(self, client):
+        """无法停用最后一个超级管理员"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        resp = await client.put("/admin/api/users/1", json={
+            "is_active": False,
+        })
+        assert resp.status == 400, f"expected 400, got {resp.status}"
+        body = await resp.json()
+        assert "无法停用" in body.get("message", "")
