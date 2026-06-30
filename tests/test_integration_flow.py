@@ -549,3 +549,92 @@ class TestPermissionAccess:
         assert resp.status == 400, f"expected 400, got {resp.status}"
         body = await resp.json()
         assert "无法停用" in body.get("message", "")
+
+
+class TestSearch:
+
+    @pytest.mark.asyncio
+    async def test_28_search_endpoint_by_path(self, client):
+        """搜索端点路径返回匹配结果"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/search?q=hello")
+        assert resp.status == 200, f"expected 200, got {resp.status}"
+        body = await resp.json()
+        assert body["code"] == 200
+        assert len(body["data"]["items"]) >= 1
+        items = body["data"]["items"]
+        ep = [i for i in items if i["type"] == "endpoint" and "/api/hello" in i["title"]]
+        assert len(ep) >= 1
+        assert "url" in ep[0]
+
+    @pytest.mark.asyncio
+    async def test_29_search_empty_result(self, client):
+        """搜索不存在的关键词返回空列表"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/search?q=xyznonexistent12345")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["data"]["items"] == []
+
+    @pytest.mark.asyncio
+    async def test_30_search_without_q_returns_empty(self, client):
+        """不传 q 参数返回空列表"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/search")
+        assert resp.status == 200
+        body = await resp.json()
+        assert body["data"]["items"] == []
+
+    @pytest.mark.asyncio
+    async def test_31_search_unauthenticated(self, client):
+        """未登录用户搜索返回 401"""
+        resp = await client.get("/admin/api/search?q=hello")
+        assert resp.status == 401
+
+    @pytest.mark.asyncio
+    async def test_32_search_permission_filter_visitor(self, client):
+        """visitor 用户只看到有权限的模块（无 users）"""
+        sid = await _login_as(client, "visitor", "visitor123")
+        await _set_cookie(client, sid)
+        # 搜索所有内容
+        resp = await client.get("/admin/api/search?q=admin")
+        assert resp.status == 200
+        body = await resp.json()
+        items = body["data"]["items"]
+        # visitor 没有 users:view，搜索结果不应包含 type=user
+        user_items = [i for i in items if i["type"] == "user"]
+        assert len(user_items) == 0, f"visitor should not see users, got {user_items}"
+
+    @pytest.mark.asyncio
+    async def test_33_search_special_chars(self, client):
+        """特殊字符搜索不报错"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        for q in ("{}", "[]", "*", "(", ")", "\\"):
+            resp = await client.get(f"/admin/api/search?q={q}")
+            assert resp.status == 200, f"q={q} failed: {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_34_search_very_long_keyword(self, client):
+        """超长关键词搜索不报错"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        q = "x" * 500
+        resp = await client.get(f"/admin/api/search?q={q}")
+        assert resp.status == 200
+
+    @pytest.mark.asyncio
+    async def test_35_search_result_has_url_with_params(self, client):
+        """搜索结果中包含带 q 和 highlight 参数的 url"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+        resp = await client.get("/admin/api/search?q=hello")
+        assert resp.status == 200
+        body = await resp.json()
+        for item in body["data"]["items"]:
+            assert "url" in item, f"missing url in {item}"
+            assert "q=" in item["url"], f"url missing q= param: {item['url']}"
+            assert "highlight=" in item["url"], f"url missing highlight= param: {item['url']}"
