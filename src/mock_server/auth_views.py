@@ -60,6 +60,7 @@ async def login_api(request: web.Request):
             "username": user.username,
             "display_name": user.display_name,
             "is_superuser": user.is_superuser,
+            "roles": [{"id": r.id, "name": r.name, "code": r.code} for r in user.roles],
         }
 
         session_id = create_session(user_data, permissions)
