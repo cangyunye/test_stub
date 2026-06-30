@@ -90,6 +90,13 @@ async def user_update_api(request: web.Request):
         if not user:
             return web.json_response({"code": 404, "message": "用户不存在", "data": None}, status=404)
         user.display_name = data.get("display_name", user.display_name)
+        if "is_superuser" in data:
+            # 禁止取消最后一个超级管理员
+            if user.is_superuser and not data["is_superuser"]:
+                count = await session.scalar(select(func.count()).select_from(User).where(User.is_superuser == True))
+                if count <= 1:
+                    return web.json_response({"code": 400, "message": "无法取消最后一个超级管理员", "data": None}, status=400)
+            user.is_superuser = data["is_superuser"]
         if "is_active" in data:
             # 禁止停用最后一个超级管理员
             if user.is_superuser and not data["is_active"]:
