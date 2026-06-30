@@ -21,6 +21,7 @@ from mock_server.websocket_api import (
 )
 from mock_server.log_api import log_list_api, log_get_api, log_clear_api
 from mock_server.dashboard_api import dashboard_stats_api
+from mock_server.search_api import search_api
 from mock_server.seed import seed_data
 from mock_server.config import settings
 
@@ -55,6 +56,9 @@ def create_app() -> web.Application:
 
     # Dashboard
     app.router.add_get(f"{prefix}/api/dashboard/stats", dashboard_stats_api)
+
+    # Global search
+    app.router.add_get(f"{prefix}/api/search", search_api)
 
     # Endpoint management routes
     app.router.add_get(f"{prefix}/api/endpoints", endpoint_list_api)
