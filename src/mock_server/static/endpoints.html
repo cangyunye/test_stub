@@ -249,10 +249,6 @@ tr.highlight { background: var(--accent-dim) !important; animation: fade-highlig
       <button class="btn-icon" title="帮助" onclick="openHelp()" aria-label="帮助">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 6.5a1.5 1.5 0 113 0c0 1-1.5 1.5-1.5 2.5v.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="11.5" r=".5" fill="currentColor"/></svg>
       </button>
-      <button class="btn btn-primary" id="headerCreateEndpoint" onclick="openModal()">
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        新建端点
-      </button>
     </div>
   </header>
 
@@ -275,6 +271,10 @@ tr.highlight { background: var(--accent-dim) !important; animation: fade-highlig
           <button class="filter-chip" data-method="put" onclick="filterMethod(this)">PUT</button>
           <button class="filter-chip" data-method="delete" onclick="filterMethod(this)">DEL</button>
         </div>
+        <button class="btn btn-primary" id="headerCreateEndpoint" onclick="openModal()" style="margin-left:auto">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          新建端点
+        </button>
       </div>
 
       <div class="panel">
