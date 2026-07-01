@@ -962,9 +962,13 @@ function changePageSize(type) {
   }
 }
 
+function encodePath(p) {
+  return p.replace(/\?/g, '%3F');
+}
+
 function generateCurlSnippet(ep) {
   var lines = [];
-  lines.push('curl -X ' + ep.method + " '" + location.origin + ep.path + "'");
+  lines.push('curl -X ' + ep.method + " '" + location.origin + encodePath(ep.path) + "'");
   if (ep.owner_id) {
     var ownerName = 'admin';
     if (users && users.length) {
@@ -988,7 +992,7 @@ function generatePythonSnippet(ep) {
   var lines = [];
   lines.push('import requests');
   lines.push('');
-  lines.push('url = "' + location.origin + ep.path + '"');
+  lines.push('url = "' + location.origin + encodePath(ep.path) + '"');
   lines.push('headers = {}');
   if (ep.owner_id) {
     var ownerName = 'admin';
@@ -1046,7 +1050,7 @@ async function showSnippetFor(id) {
 
 function generateJsSnippet(ep) {
   var lines = [];
-  lines.push('fetch("' + location.origin + ep.path + '", {');
+  lines.push('fetch("' + location.origin + encodePath(ep.path) + '", {');
   lines.push('  method: "' + ep.method + '",');
   lines.push('  headers: { "Content-Type": "application/json"');
   if (ep.owner_id) {
@@ -1227,7 +1231,7 @@ function generateWebsocatSnippet(ch) {
   lines.push('# 安装: brew install websocat / cargo install websocat');
   lines.push('# 或从 https://github.com/vi/websocat/releases 下载');
   lines.push('');
-  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + ch.path;
+  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + encodePath(ch.path);
   lines.push('websocat ' + url);
   if (ch.echo_mode) {
     lines.push('');
@@ -1245,7 +1249,7 @@ function generateWsPythonSnippet(ch) {
   lines.push('import asyncio');
   lines.push('import websockets');
   lines.push('');
-  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + ch.path;
+  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + encodePath(ch.path);
   lines.push('async def connect():');
   lines.push('    async with websockets.connect("' + url + '") as ws:');
   lines.push('        print("connected")');
@@ -1272,7 +1276,7 @@ function generateWsPythonSnippet(ch) {
 
 function generateWsJsSnippet(ch) {
   var lines = [];
-  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + ch.path;
+  var url = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + encodePath(ch.path);
   lines.push('var ws = new WebSocket("' + url + '");');
   lines.push('');
   lines.push('ws.onopen = function() {');
