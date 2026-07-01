@@ -30,27 +30,38 @@ async def dynamic_handler(request: web.Request) -> web.Response:
             if user:
                 owner_id = user.id
 
+    # 候选路径：原始 path，以及 path + "?" + query_string（支持字面 ? 在路径中）
+    candidate_paths = [path]
+    if request.query_string:
+        candidate_paths.append(path + "?" + request.query_string)
+
     async with AsyncSessionLocal() as session:
         # 查找匹配的 endpoint：先匹配 owner_id，再匹配公共端点
-        stmt = select(Endpoint).where(
-            Endpoint.method == method,
-            Endpoint.path == path,
-            Endpoint.is_active == True,
-            Endpoint.owner_id == owner_id
-        )
-        result = await session.execute(stmt)
-        endpoint = result.scalar_one_or_none()
-
-        # 如果未找到用户专属端点，尝试公共端点
-        if endpoint is None and owner_id is not None:
+        for try_path in candidate_paths:
             stmt = select(Endpoint).where(
                 Endpoint.method == method,
-                Endpoint.path == path,
+                Endpoint.path == try_path,
                 Endpoint.is_active == True,
-                Endpoint.owner_id == None
+                Endpoint.owner_id == owner_id
             )
             result = await session.execute(stmt)
             endpoint = result.scalar_one_or_none()
+            if endpoint:
+                break
+
+        # 如果未找到用户专属端点，尝试公共端点
+        if endpoint is None and owner_id is not None:
+            for try_path in candidate_paths:
+                stmt = select(Endpoint).where(
+                    Endpoint.method == method,
+                    Endpoint.path == try_path,
+                    Endpoint.is_active == True,
+                    Endpoint.owner_id == None
+                )
+                result = await session.execute(stmt)
+                endpoint = result.scalar_one_or_none()
+                if endpoint:
+                    break
 
         request_data = {
             "method": method,

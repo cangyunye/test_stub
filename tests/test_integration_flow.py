@@ -638,3 +638,47 @@ class TestSearch:
             assert "url" in item, f"missing url in {item}"
             assert "q=" in item["url"], f"url missing q= param: {item['url']}"
             assert "highlight=" in item["url"], f"url missing highlight= param: {item['url']}"
+
+
+class TestPathQuery:
+
+    @pytest.mark.asyncio
+    async def test_36_endpoint_with_literal_question(self, client):
+        """端点路径含字面 ?，支持 ? 和 %3F 两种方式访问"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        # 创建带 ? 的路径
+        resp = await client.post("/admin/api/endpoints", json={
+            "method": "GET", "path": "/api/qa?foo=bar",
+            "status_code": 200, "response_body": '{"ok":true}',
+            "is_active": True,
+        })
+        body = await resp.json()
+        assert body["code"] in (200, 201), body
+
+        # 用 %3F 访问（字面 ?）
+        resp = await client.get("/api/qa%3Ffoo=bar")
+        assert resp.status == 200, f"%3F access expected 200, got {resp.status}"
+
+        # 用 ? 访问（作为 query string），匹配 path + "?" + query_string
+        resp = await client.get("/api/qa?foo=bar")
+        assert resp.status == 200, f"? access expected 200, got {resp.status}"
+
+    @pytest.mark.asyncio
+    async def test_37_endpoint_with_question_no_query(self, client):
+        """路径含 ? 但请求无 query string 时也能匹配"""
+        sid = await _login(client)
+        await _set_cookie(client, sid)
+
+        resp = await client.post("/admin/api/endpoints", json={
+            "method": "GET", "path": "/api/qonly?",
+            "status_code": 200, "response_body": '{"ok":true}',
+            "is_active": True,
+        })
+        body = await resp.json()
+        assert body["code"] in (200, 201), body
+
+        # %3F 访问（字面 ?）
+        resp = await client.get("/api/qonly%3F")
+        assert resp.status == 200, f"got {resp.status}"
