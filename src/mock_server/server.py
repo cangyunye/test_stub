@@ -38,7 +38,7 @@ async def on_cleanup(app: web.Application):
 
 
 def create_app() -> web.Application:
-    app = web.Application(middlewares=[session_middleware])
+    app = web.Application(middlewares=[session_middleware], client_max_size=settings.max_request_body_size)
 
     # Jinja2 仍用于响应体模板渲染（ResponseEngine），此处保留 loader
     aiohttp_jinja2.setup(app, loader=jinja2.DictLoader({}))
