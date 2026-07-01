@@ -59,6 +59,19 @@ Python 3.11 + aiohttp 测试桩服务。支持多租户端点隔离、Jinja2 模
 - **配置**: pydantic-settings，环境变量覆盖（`MOCK_DATABASE_URL` 等）
 - **前端**: 纯静态 HTML 位于 `src/mock_server/static/`，由 `admin_pages.py` 缓存后以 `text/html` 返回；JS 调 `/admin/api/*`
 
+## Configuration
+
+所有配置通过环境变量覆盖，前缀 `MOCK_`：
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `MOCK_HOST` | `0.0.0.0` | 监听地址 |
+| `MOCK_PORT` | `8080` | 监听端口 |
+| `MOCK_DATABASE_URL` | `sqlite+aiosqlite:///./mock_server.db` | 数据库连接串（PostgreSQL 示例：`postgresql+asyncpg://user:pass@localhost/mock`） |
+| `MOCK_ADMIN_PATH` | `/admin` | 管理后台路径前缀 |
+| `MOCK_MAX_REQUEST_BODY_SIZE` | `20971520` (20MB) | 最大请求体字节数，用于支持大 base64 数据上传 |
+| `MOCK_LOG_RETENTION_DAYS` | `7` | 请求日志保留天数 |
+
 ## Seed Data
 
 首次启动自动创建：
